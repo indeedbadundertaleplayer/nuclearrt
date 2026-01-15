@@ -75,7 +75,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile="D:\Multimedia Fusion Developer 2\Data\Runtime\Anaconda.bld"
+				OutputFile="$(OutDir)/nuclearrt.bld"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\MMF2BuilderDll.def"
@@ -171,7 +171,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile="D:\Multimedia Fusion Developer 2\Data\Runtime\Anaconda.bld"
+				OutputFile="$(OutDir)/nuclearrt.bld"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\MMF2BuilderDll.def"
