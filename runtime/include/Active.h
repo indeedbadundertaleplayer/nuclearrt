@@ -9,7 +9,6 @@
 #include "AlterableStrings.h"
 #include "AlterableFlags.h"
 #include "Movements.h"
-
 class Active : public ObjectInstance {
 public:
 	Active(unsigned int objectInfoHandle, int type, std::string name)
@@ -20,8 +19,8 @@ public:
 	AlterableStrings Strings;
 	AlterableFlags Flags;
 	Movements movements;
-
 	bool Visible = true;
+	bool IsFlashing = false;
 	bool FollowFrame = false;
 	bool AutomaticRotation = false;
 	bool FineDetection = false;
@@ -29,7 +28,6 @@ public:
 	std::vector<unsigned int> GetImagesUsed() override {
 		return animations.GetImagesUsed();
 	}
-
 	ObjectGlobalData* CreateGlobalData() override {
 		ObjectGlobalData* globalData = new ObjectGlobalData(ObjectInfoHandle);
 		

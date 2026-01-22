@@ -30,10 +30,11 @@ public:
 	void SetForcedSequence(int sequence);
 	void SetForcedFrame(int frame);
 	void SetForcedDirection(int directionMask);
-
+	void SetAnimationSpeed(int newSpeed) {forcedSpeed = newSpeed;}
 	void RestoreForcedSequence();
 	void RestoreForcedDirection();
 	void RestoreForcedFrame();
+	void RestoreAnimationSpeed() {forcedSpeed = animationSpeed;}
 
 	bool IsDirectionForced() const;
 
@@ -53,7 +54,8 @@ private:
 	int forcedFrame = -1;
 	int forcedDirection = -1;
 	int forcedSequence = -1;
-
+	int animationSpeed = 50;
+	int forcedSpeed = 50;
 	int automaticRotationDirection = -1;
 
 	mutable std::unordered_map<int, bool> SequenceOverEvents;

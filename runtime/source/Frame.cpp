@@ -48,11 +48,12 @@ void Frame::Update()
 void Frame::Draw()
 {
 	Application::Instance().GetBackend()->Clear(BackgroundColor);
-
+	Application::Instance().GetBackend()->BeginShaderDraw(frameShader->Name);
 	for (unsigned int i = 0; i < Layers.size(); i++)
 	{
 		DrawLayer(Layers[i]);
 	}
+	Application::Instance().GetBackend()->EndShaderDraw();
 }
 
 void Frame::SetScroll(int x, int y, int layer)
@@ -98,16 +99,24 @@ void Frame::SetScrollY(int y)
 
 void Frame::DrawLayer(Layer& layer)
 {
+	Application::Instance().GetBackend()->BeginShaderDraw(layer.layerShader->Name);
 	for (auto& instance : layer.instances)
 	{
 		if (instance->Type == 1)
 		{
 			auto& imageBank = ImageBank::Instance();
 			unsigned int imageId = ((Backdrop*)instance)->Image;
-
+			auto imageInfo = imageBank.GetImage(imageId);
+			if (instance->shader->hasPixelSize) {
+				instance->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(imageInfo->Width);
+				instance->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(imageInfo->Height);
+				Application::Instance().GetBackend()->SetFragmentUniforms(instance->shader->Name, 1, &instance->shader->pixelSize, sizeof(instance->shader->pixelSize));
+			}
+			Application::Instance().GetBackend()->BeginShaderDraw(instance->shader->Name);
 			Application::Instance().GetBackend()->DrawTexture(
 				imageId, instance->X - (scrollX * layer.XCoefficient), instance->Y - (scrollY * layer.YCoefficient),
-				0, 0, 0, 1.0f, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter());
+				0, 0, 0, instance->scaleX, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter(), instance->scaleY);
+			Application::Instance().GetBackend()->EndShaderDraw();
 		}
 		else if (instance->Type == 2)
 		{
@@ -128,6 +137,11 @@ void Frame::DrawLayer(Layer& layer)
 			auto imageInfo = imageBank.GetImage(imageId);
 			if (imageInfo)
 			{
+				if (instance->shader->hasPixelSize) {
+					instance->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(imageInfo->Width);
+					instance->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(imageInfo->Height);
+					Application::Instance().GetBackend()->SetFragmentUniforms(instance->shader->Name, 1, &instance->shader->pixelSize, sizeof(instance->shader->pixelSize));
+				}
 				int angle = ((Active*)instance)->GetAngle();
 				if (((Active*)instance)->AutomaticRotation)
 				{
@@ -141,11 +155,12 @@ void Frame::DrawLayer(Layer& layer)
 						angle += animations.GetAutomaticRotationDirection() * 180 / 16;
 					}
 				}
-
+				Application::Instance().GetBackend()->BeginShaderDraw(instance->shader->Name);
 				Application::Instance().GetBackend()->DrawTexture(
 					imageId, instance->X - scrollXOffset, instance->Y - scrollYOffset,
 					imageInfo->HotspotX, imageInfo->HotspotY, 
-					angle, 1.0f, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter());
+					angle, instance->scaleX, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter(), instance->scaleY);
+				Application::Instance().GetBackend()->EndShaderDraw();
 			}
 		}
 		else if (instance->Type == 3) // Text
@@ -162,7 +177,14 @@ void Frame::DrawLayer(Layer& layer)
 			}
 
 			std::string text = ((StringObject*)instance)->GetText();
+			if (instance->shader->hasPixelSize) {
+				instance->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(((StringObject*)instance)->Width);
+				instance->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(((StringObject*)instance)->Height);
+				Application::Instance().GetBackend()->SetFragmentUniforms(instance->shader->Name, 1, &instance->shader->pixelSize, sizeof(instance->shader->pixelSize));
+			}
+			Application::Instance().GetBackend()->BeginShaderDraw(instance->shader->Name);
 			Application::Instance().GetBackend()->DrawText(FontBank::Instance().GetFont(((StringObject*)instance)->GetFont()), instance->X - scrollXOffset, instance->Y - scrollYOffset, ((StringObject*)instance)->GetColor(), text, instance->Handle);
+			Application::Instance().GetBackend()->EndShaderDraw();
 		}
 		else if (instance->Type == 5 || instance->Type == 6 || instance->Type == 7) // Score, Lives, Counter
 		{
@@ -203,13 +225,21 @@ void Frame::DrawLayer(Layer& layer)
 		{
 			int scrollXOffset = scrollX * layer.XCoefficient;
 			int scrollYOffset = scrollY * layer.YCoefficient;
+			if (instance->shader->hasPixelSize) {
+				instance->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(((QuickBackdrop*)instance)->Width);
+				instance->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(((QuickBackdrop*)instance)->Width);
+				Application::Instance().GetBackend()->SetFragmentUniforms(instance->shader->Name, 1, &instance->shader->pixelSize, sizeof(instance->shader->pixelSize));
+			}
+			Application::Instance().GetBackend()->BeginShaderDraw(instance->shader->Name);
 			Application::Instance().GetBackend()->DrawQuickBackdrop(instance->X - scrollXOffset, instance->Y - scrollYOffset, ((QuickBackdrop*)instance)->Width, ((QuickBackdrop*)instance)->Height, &((QuickBackdrop*)instance)->shape);
+			Application::Instance().GetBackend()->EndShaderDraw();
 		}
 		else if (instance->Type >= 32) // Extension
 		{
 			((Extension*)instance)->Draw();
 		}
 	}
+	Application::Instance().GetBackend()->EndShaderDraw();
 }
 
 void Frame::DrawCounterNumbers(CounterBase *counter, int value, int x, int y)
@@ -289,12 +319,20 @@ void Frame::DrawCounterNumbers(CounterBase *counter, int value, int x, int y)
 
 		int imageIndex = charMap.find(valueString[i]);
 		auto imageInfo = ImageBank::Instance().GetImage(counter->Frames[imageIndex]);
+		
 		if (imageInfo)
 		{
+			if (counter->shader->hasPixelSize) {
+				counter->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(imageInfo->Width);
+				counter->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(imageInfo->Height);
+				Application::Instance().GetBackend()->SetFragmentUniforms(counter->shader->Name, 1, &counter->shader->pixelSize, sizeof(counter->shader->pixelSize));
+			}
+			Application::Instance().GetBackend()->BeginShaderDraw(counter->shader->Name);
 			Application::Instance().GetBackend()->DrawTexture(
 				counter->Frames[imageIndex], currentX, y - MaxHeight,
 				0, 0, 
-				0, 1.0f, 0xFFFFFFFF, 0, 0);
+				0, 1.0f, 0xFFFFFFFF, 0, 0, 1.0f);
+			Application::Instance().GetBackend()->EndShaderDraw();
 			currentX += imageInfo->Width;
 		}
 	}

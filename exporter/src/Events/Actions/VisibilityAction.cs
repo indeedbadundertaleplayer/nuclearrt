@@ -14,6 +14,7 @@ public class MakeInvisibleAction : ActionBase
 		result.AppendLine($"for (ObjectIterator it(*{GetSelector(eventBase.ObjectInfo)}); !it.end(); ++it) {{");
 		result.AppendLine($"    auto instance = *it;");
 		result.AppendLine($"    (({ExpressionConverter.GetObjectClassName(eventBase.ObjectInfo, IsGlobal)}*)instance)->Visible = {(eventBase.Num == 26 ? false : true).ToString().ToLower()};");
+		result.AppendLine($"    (({ExpressionConverter.GetObjectClassName(eventBase.ObjectInfo, IsGlobal)}*)instance)->IsFlashing = false;");
 		result.AppendLine("}");
 
 		return result.ToString();
@@ -43,4 +44,34 @@ public class StringMakeInvisibleAction : MakeInvisibleAction
 public class StringReappearAction : ReappearAction
 {
 	public override int ObjectType { get; set; } = 3;
+}
+public class FlashAction : ActionBase
+{
+	public override int ObjectType {get; set; } = -2;
+	public override int Num { get; set; } = 28;
+	public override string Build(EventBase eventBase, ref string nextLabel, ref int orIndex, Dictionary<string, object>? parameters = null, string ifStatement = "if (")
+	{
+		string val;
+		if (eventBase.Items[0].Loader is Time time) val = time.Timer.ToString();
+		else if (eventBase.Items[0].Loader is ExpressionParameter expressionParameter) val = ExpressionConverter.ConvertExpression(expressionParameter, eventBase);
+		else val = "0";
+		StringBuilder result = new StringBuilder();
+		result.AppendLine($"for (ObjectIterator it(*{GetSelector(eventBase.ObjectInfo)}); !it.end(); ++it) {{");
+		result.AppendLine("		auto instance = *it;");
+		result.AppendLine($"    (({ExpressionConverter.GetObjectClassName(eventBase.ObjectInfo, IsGlobal)}*)instance)->IsFlashing = true;");
+		result.AppendLine($"	if (GameTimer.CheckEvent({parameters["eventIndex"]}, {val}, TimerEventType::Every)) {{");
+		result.AppendLine($"			if ((({ExpressionConverter.GetObjectClassName(eventBase.ObjectInfo, IsGlobal)}*)instance)->IsFlashing)");
+		result.AppendLine($"				(({ExpressionConverter.GetObjectClassName(eventBase.ObjectInfo, IsGlobal)}*)instance)->Visible = !(({ExpressionConverter.GetObjectClassName(eventBase.ObjectInfo, IsGlobal)}*)instance)->Visible");
+		result.AppendLine("		}");
+		result.AppendLine("}");
+		return result.ToString();
+	}
+}
+public class FlashString : FlashAction
+{
+	public override int ObjectType { get; set; } = 3;
+}
+public class FlashCounter : FlashAction
+{
+	public override int ObjectType { get; set; } = 7;
 }

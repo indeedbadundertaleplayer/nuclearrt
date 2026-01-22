@@ -2,7 +2,7 @@
 
 #include <memory>
 #include <vector>
-
+#include "ObjectInstance.h"
 #include "ObjectGlobalDataString.h"
 #include "Paragraph.h"
 #include "Shape.h"
@@ -16,6 +16,7 @@ public:
 	int Height;
 
 	bool Visible = true;
+	bool IsFlashing = false;
 	bool FollowFrame = false;
 
 	std::vector<Paragraph> Paragraphs;
@@ -56,6 +57,11 @@ public:
 		else
 		{
 			return Paragraphs[CurrentParagraph].Color;
+		}
+	}
+	void SetColor(int newColor) {
+		for (auto& pair : Paragraphs) {
+			pair.Color = newColor;
 		}
 	}
 

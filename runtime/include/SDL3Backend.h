@@ -6,7 +6,6 @@
 #include <vector>
 #include <unordered_map>
 #include <set>
-
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
@@ -35,6 +34,13 @@ typedef struct Channel {
 	float pan = 0.0f;
 	std::string name = "";
 } Channel;
+typedef struct Shaders {
+	std::string Name;
+	SDL_GPUShader* gpuShader;
+	SDL_GPURenderState* state;
+	int numSamplers;
+	int numUniformBuffers;
+} Shaders;
 class SDL3Backend : public Backend {
 public:
 	SDL3Backend();
@@ -56,9 +62,53 @@ public:
 
 	void LoadTexture(int id) override;
 	void UnloadTexture(int id) override;
-	void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter) override;
+	void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scaleX, int color, int effect, unsigned char effectParameter, float scaleY) override;
 	void DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape) override;
-	
+	void DrawBGTexture(int x, int y, int width, int height, float scaleX, float scaleY) override;
+	void CreateShader(std::string name, int numSamplers, int numUniformBuffers, const unsigned char* code, int codeSize) override;
+	void ClearShaders() override;
+	void BeginShaderDraw(std::string name) override {
+		if (name == "None") {
+			SDL_SetGPURenderState(renderer, NULL);
+			return;
+		}
+		auto it = shaders.find(name);
+		if (it == shaders.end()) {
+			SDL_SetGPURenderState(renderer, NULL);
+			return;
+		}
+		Shaders& shader = it->second;
+		if (shader.Name == "None") {
+			SDL_SetGPURenderState(renderer, NULL);
+			return;
+		}
+		if (shader.state) SDL_SetGPURenderState(renderer, shader.state);
+		else SDL_SetGPURenderState(renderer, NULL);
+	}
+	void EndShaderDraw() override {
+		SDL_SetGPURenderState(renderer, NULL);
+	}
+	bool SetFragmentUniforms(std::string name, uint32_t slotIndex, const void* data, uint32_t length) override {
+		auto it = shaders.find(name);
+		if (it == shaders.end()) {
+			std::cout << "Couldn't find shader\n";
+			return false;
+		}
+		Shaders& shader = it->second;
+		if (slotIndex >= 2) return false;
+		if (shader.state) {
+			if (!SDL_SetGPURenderStateFragmentUniforms(shader.state, slotIndex, data, length)) {
+				std::cout << "SDL_SetGPURenderStateFragmentUniforms failed : " << SDL_GetError() << "\n";
+				return false;
+			}
+			else {
+				std::cout << "Uniforms Set\n";
+				return true;
+			}
+		}
+		else std::cout << "Shader has no state\n";
+		return false;
+	}
 	void DrawRectangle(int x, int y, int width, int height, int color) override;
 	void DrawRectangleLines(int x, int y, int width, int height, int color) override;
 	void DrawLine(int x1, int y1, int x2, int y2, int color) override;
@@ -120,7 +170,7 @@ public:
 
 	bool IsPixelTransparent(int textureId, int x, int y) override;
 	void GetTextureDimensions(int textureId, int& width, int& height) override;
-
+	const char* GetRendererName() {return SDL_GetGPUDeviceDriver(gpuDevice);}
 #ifdef _DEBUG
 	void ToggleDebugUI() { DEBUG_UI.ToggleEnabled(); }
 	bool IsDebugUIEnabled() { return DEBUG_UI.IsEnabled(); }
@@ -144,12 +194,13 @@ private:
 	std::unordered_map<int, int> imageToMosaic;
 	std::unordered_map<int, std::set<int>> mosaicToImages;
 	std::unordered_map<std::string, SampleFile> sampleFiles;
+	std::unordered_map<std::string, Shaders> shaders;
 	Channel channels[49]; // 48 will be the last element.
 	SDL_AudioStream* masterStream;
 	bool windowFocused = true;
 	std::unordered_map<int, TTF_Font*> fonts;
 	std::unordered_map<std::string, std::shared_ptr<std::vector<uint8_t>>> fontBuffers;
-
+	SDL_Texture* backgroundTexture;
 	struct TextCacheKey {
 		unsigned int fontHandle;
 		std::string text;

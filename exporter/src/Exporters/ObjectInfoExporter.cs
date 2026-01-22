@@ -120,7 +120,7 @@ public class ObjectInfoExporter : BaseExporter
 							break;
 						}
 					}
-					
+
 					if (isGlobal) break;
 				}
 
@@ -149,6 +149,10 @@ public class ObjectInfoExporter : BaseExporter
 			result.AppendLine($"((Active*)instance)->Strings = {BuildAlterableStrings(common)};");
 			result.AppendLine($"((Active*)instance)->Flags = {BuildAlterableFlags(common)};");
 			result.AppendLine($"((Active*)instance)->movements = {BuildMovements(common)};");
+			result.AppendLine($"instance->SetShader(\"{common.Parent.shaderData.name}\");");
+			foreach (var i in common.Parent.shaderData.parameters) result.AppendLine($"instance->SetShaderParam({i.Name}, {i.Value});");
+
+			
 		}
 		else if (objectInfo.ObjectType == 3)
 		{
@@ -258,11 +262,11 @@ public class ObjectInfoExporter : BaseExporter
 			foreach (var direction in sequence.Value.DirectionDict.Values)
 			{
 				int index = sequence.Value.DirectionDict.FirstOrDefault(x => x.Value == direction).Key;
-					directions.Add(
-						"std::pair<int, Direction*>(" + index + ", new Direction(" + index + ", " + direction.MinSpeed + ", " +
-						direction.MaxSpeed + ", " + (direction.Repeat == 0).ToString().ToLower() + ", " + direction.BackTo + ", " +
-						"std::vector<unsigned int>{" + string.Join(",", direction.Frames) + "}))"
-					);
+				directions.Add(
+					"std::pair<int, Direction*>(" + index + ", new Direction(" + index + ", " + direction.MinSpeed + ", " +
+					direction.MaxSpeed + ", " + (direction.Repeat == 0).ToString().ToLower() + ", " + direction.BackTo + ", " +
+					"std::vector<unsigned int>{" + string.Join(",", direction.Frames) + "}))"
+				);
 			}
 
 			sequenceStr.Append(string.Join(", ", directions));

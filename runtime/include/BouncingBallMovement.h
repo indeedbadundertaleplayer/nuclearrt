@@ -17,6 +17,7 @@ public:
 	float realSpeed = 0;
 
 	int GetRealSpeed() override { return static_cast<int>(realSpeed); }
+	void SetSpeed(float newSpeed) override {speed = round(newSpeed);}
 	int GetMovementDirection() override { return movementDirection; }
 	
 	void OnEnabled() override;

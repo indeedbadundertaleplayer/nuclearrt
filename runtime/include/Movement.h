@@ -3,7 +3,7 @@
 #include <unordered_map>
 #include <memory>
 #include <vector>
-
+#include <math.h>
 #include "ObjectInstance.h"
 #include "Application.h"
 
@@ -29,6 +29,7 @@ public:
 	virtual void OnEnabled() {} // called when the movement is switched to
 	virtual void OnDisabled() {} // called when the movement is switched to another movement
 	virtual int GetRealSpeed() { return 0; }
+	virtual void SetSpeed(float newSpeed) {}
 	virtual bool IsStopped() { return GetRealSpeed() == 0; }
 	virtual void SetMovementDirection(int directionMask) { 
 		if (directionMask == 0) return;

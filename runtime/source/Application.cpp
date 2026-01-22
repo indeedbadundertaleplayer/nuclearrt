@@ -227,6 +227,7 @@ void Application::LoadFrame(int frameIndex)
 	}
 
 	std::cout << "Loaded frame " << frameIndex << std::endl;
+	QueueStateChange(GameState::StartOfFrame);
 	if (!GetAppData()->GetSampleOverFrame()) backend->StopSample(-1, false);
 }
 
@@ -317,6 +318,7 @@ void Application::RunState()
 			break;
 		case GameState::RestartApplication:
 			globalObjectData.clear();
+			currentState = GameState::EndFrame;
 			LoadFrame(0);
 			currentState = GameState::StartOfFrame;
 			break;
@@ -324,18 +326,22 @@ void Application::RunState()
 			currentState = GameState::Running;
 			break;
 		case GameState::NextFrame:
+			currentState = GameState::EndFrame;
 			LoadFrame(currentFrame->Index + 1);
 			currentState = GameState::StartOfFrame;
 			break;
 		case GameState::PreviousFrame:
+			currentState = GameState::EndFrame;
 			LoadFrame(currentFrame->Index - 1);
 			currentState = GameState::StartOfFrame;
 			break;
 		case GameState::JumpToFrame:
+			currentState = GameState::EndFrame;
 			LoadFrame(newFrameIndex);
 			currentState = GameState::StartOfFrame;
 			break;
 		case GameState::RestartFrame:
+			currentState = GameState::EndFrame;
 			LoadFrame(currentFrame->Index);
 			currentState = GameState::StartOfFrame;
 			break;

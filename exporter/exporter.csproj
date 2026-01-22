@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>false</UseWindowsForms>
     <UseWPF>false</UseWPF>
+	<PublishAot>true</PublishAot>
   </PropertyGroup>
 
   <ItemGroup>

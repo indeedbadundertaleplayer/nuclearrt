@@ -30,5 +30,6 @@ public:
 	void Stop() override;
 	void Update(float deltaTime) override;
 	int GetRealSpeed() override;
+	void SetSpeed(float newSpeed) override;
 	int GetMovementDirection() override;
 };

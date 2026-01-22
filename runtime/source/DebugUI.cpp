@@ -8,9 +8,13 @@
 
 // Dear ImGui includes
 #include "imgui.h"
+#ifdef NUCLEAR_BACKEND_SDL3
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
-
+#elif NUCLEAR_BACKEND_SDL2
+#include "imgui_impl_sdl2.h"
+#include "imgui_impl_sdlrenderer2.h"
+#endif
 void DebugUI::Initialize(SDL_Window* window, SDL_Renderer* renderer) {
 	if (initialized) {
 		return;
@@ -24,10 +28,13 @@ void DebugUI::Initialize(SDL_Window* window, SDL_Renderer* renderer) {
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-
+	#ifdef NUCLEAR_BACKEND_SDL3
 	ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
 	ImGui_ImplSDLRenderer3_Init(renderer);
-
+	#elif NUCLEAR_BACKEND_SDL2
+	ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
+	ImGui_ImplSDLRenderer2_Init(renderer);
+	#endif
 	initialized = true;
 }
 
@@ -35,9 +42,13 @@ void DebugUI::Shutdown() {
 	if (!initialized) {
 		return;
 	}
-
+	#ifdef NUCLEAR_BACKEND_SDL3
 	ImGui_ImplSDLRenderer3_Shutdown();
 	ImGui_ImplSDL3_Shutdown();
+	#elif NUCLEAR_BACKEND_SDL2
+	ImGui_ImplSDLRenderer2_Shutdown();
+	ImGui_ImplSDL2_Shutdown();
+	#endif
 	ImGui::DestroyContext(context);
 	context = nullptr;
 
@@ -55,9 +66,13 @@ void DebugUI::BeginFrame() {
 	lastFrameTime = currentFrameTime;
 	
 	fps = 1.0f / frameTime;
-
+	#ifdef NUCLEAR_BACKEND_SDL3
 	ImGui_ImplSDLRenderer3_NewFrame();
 	ImGui_ImplSDL3_NewFrame();
+	#elif NUCLEAR_BACKEND_SDL2
+	ImGui_ImplSDLRenderer2_NewFrame();
+	ImGui_ImplSDL2_NewFrame();
+	#endif
 	ImGui::NewFrame();
 }
 
@@ -70,7 +85,11 @@ void DebugUI::EndFrame() {
 	RenderMetrics();
 
 	ImGui::Render();
+	#ifdef NUCLEAR_BACKEND_SDL3
 	ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
+	#elif NUCLEAR_BACKEND_SDL2
+	ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
+	#endif
 }
 
 void DebugUI::AddWindow(const std::string& name, std::function<void()> renderFunction) {

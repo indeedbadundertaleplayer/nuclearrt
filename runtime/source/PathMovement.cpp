@@ -214,7 +214,13 @@ int PathMovement::GetRealSpeed() {
 
 	return static_cast<int>(Nodes[currentNodeIndex].Speed);
 }
-
+void PathMovement::SetSpeed(float newSpeed) {
+	if (Nodes.empty()) return;
+	if (currentNodeIndex >= static_cast<int>(Nodes.size()) || currentNodeIndex < 0) return;
+	for (auto pair : Nodes) {
+		pair.Speed = static_cast<unsigned char>(newSpeed);
+	}
+}
 int PathMovement::GetMovementDirection() {
 	if (Nodes.empty()) {
 		return 0;

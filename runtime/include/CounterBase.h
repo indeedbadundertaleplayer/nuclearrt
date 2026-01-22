@@ -16,6 +16,7 @@ public:
 		: ObjectInstance(objectInfoHandle, type, name) {}
 
 	bool Visible = true;
+	bool IsFlashing = false;
 	bool FollowFrame = false;
 
 	AlterableValues Values;

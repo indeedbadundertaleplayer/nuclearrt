@@ -7,6 +7,7 @@ enum class GameState {
     PreviousFrame,
     JumpToFrame,
     RestartFrame,
+    EndFrame,
 	RestartApplication,
 	EndApplication
 };

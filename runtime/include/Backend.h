@@ -3,9 +3,10 @@
 #include <string>
 #include <cstdint>
 #include "FontBank.h"
+#include <iostream>
 #include "Shape.h"
 #include "PakFile.h"
-
+#include "Shader.h"
 class Backend {
 public:
 	Backend() = default;
@@ -31,14 +32,18 @@ public:
 
 	virtual void LoadTexture(int id) {}
 	virtual void UnloadTexture(int id) {}
-	virtual void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter) {}
+	virtual void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scaleX, int color, int effect, unsigned char effectParameter, float scaleY) {}
 	virtual void DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape) {}
-
+	virtual void CreateShader(std::string name, int numSamplers, int numUniformBuffers, const unsigned char* code, int codeSize) {}
+	virtual void ClearShaders() {}
+	virtual void BeginShaderDraw(std::string name) {}
+	virtual void EndShaderDraw() {}
+	virtual bool SetFragmentUniforms(std::string name, uint32_t slotIndex, const void* data, uint32_t length) { return false; }
 	virtual void DrawRectangle(int x, int y, int width, int height, int color) {}
 	virtual void DrawRectangleLines(int x, int y, int width, int height, int color) {}
+	virtual void DrawBGTexture(int x, int y, int width, int height, float scaleX, float scaleY) {}
 	virtual void DrawLine(int x1, int y1, int x2, int y2, int color) {}
 	virtual void DrawPixel(int x, int y, int color) {}
-
 	virtual void LoadFont(int id) {}
 	virtual void UnloadFont(int id) {}
 	virtual void DrawText(FontInfo* fontInfo, int x, int y, int color, const std::string& text, int objectHandle = -1) {}
@@ -76,7 +81,7 @@ public:
 	virtual void ShowMouseCursor() {}
 	virtual bool IsPixelTransparent(int textureId, int x, int y) { return true; }
 	virtual void GetTextureDimensions(int textureId, int& width, int& height) { width = 0; height = 0; }
-
+	virtual const char* GetRendererName() {return "";}
 protected:
 	PakFile pakFile;
 }; 

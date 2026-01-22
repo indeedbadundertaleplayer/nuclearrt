@@ -6,6 +6,7 @@
 #include <math.h>
 #include "Application.h"
 #include "Frame.h"
+#include "shaders/None.h"
 #include "FontBank.h"
 #include "SoundBank.h"
 #include "ImageBank.h"
@@ -30,18 +31,18 @@ SDL3Backend::SDL3Backend() {
 SDL3Backend::~SDL3Backend() {
 	Deinitialize();
 }
-void SDLCALL SDL3Backend::AudioCallback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount)
+void SDLCALL SDL3Backend::AudioCallback(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount)
 {
 	auto& channels = *(Channel(*)[49])userdata;
 	int frames = additional_amount / (sizeof(float) * 2);
-	float mixBuffer[8192 * 2] = {0}; // Initilaze array so no garbage data is found
+	float mixBuffer[8192 * 2] = { 0 }; // Initilaze array so no garbage data is found
 	if (frames > 8192) frames = 8192;
 	for (int i = 0; i < frames; ++i) {
 		float left = 0.0f, right = 0.0f;
 		for (int ch = 1; ch < SDL_arraysize(channels); ++ch) {
 			Channel& channel = channels[ch];
 			if (!channel.stream) continue;
-			float tempData[2] = {0};
+			float tempData[2] = { 0 };
 			int getData = SDL_GetAudioStreamData(channel.stream, tempData, sizeof(tempData));
 			if (getData <= 0) { // Channel has finished playing.
 				channel.finished = true;
@@ -67,8 +68,8 @@ void SDL3Backend::Initialize() {
 	int windowWidth = Application::Instance().GetAppData()->GetWindowWidth();
 	int windowHeight = Application::Instance().GetAppData()->GetWindowHeight();
 	std::string windowTitle = Application::Instance().GetAppData()->GetAppName();
-	
-	
+
+
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
 		std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
 		return;
@@ -91,10 +92,10 @@ void SDL3Backend::Initialize() {
 	spec.channels = 2;
 	spec.format = SDL_AUDIO_F32;
 	audio_device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
-    if (!audio_device) {
-        std::cerr << "SDL_OpenAudioDevice Error : " << SDL_GetError() << std::endl;
-        return;
-    }
+	if (!audio_device) {
+		std::cerr << "SDL_OpenAudioDevice Error : " << SDL_GetError() << std::endl;
+		return;
+	}
 	masterStream = SDL_CreateAudioStream(&spec, NULL);
 	SDL_BindAudioStream(audio_device, masterStream);
 	SDL_SetAudioStreamGetCallback(masterStream, AudioCallback, &channels); // Put callback only runs when SDL_PutAudioStreamData is ran, so use the getcallback to put data instead
@@ -119,7 +120,13 @@ void SDL3Backend::Initialize() {
 		std::cerr << "SDL_CreateTexture Error: " << SDL_GetError() << std::endl;
 		return;
 	}
-
+	SDL_Surface* whiteSurf = SDL_CreateSurface(Application::Instance().GetAppData()->GetWindowWidth(), Application::Instance().GetAppData()->GetWindowHeight(), SDL_PIXELFORMAT_RGBA8888);
+	const SDL_PixelFormatDetails* details = SDL_GetPixelFormatDetails(whiteSurf->format);
+	Uint32 white = SDL_MapRGBA(details, NULL, 255, 255, 255, 255);
+	SDL_FillSurfaceRect(whiteSurf, NULL, white);
+	backgroundTexture = SDL_CreateTextureFromSurface(renderer, whiteSurf);
+	SDL_DestroySurface(whiteSurf);
+	whiteSurf = nullptr;
 	//load assets
 	if (!pakFile.Load(GetAssetsFileName())) {
 		std::cerr << "PakFile::Load Error: " << "Failed to load assets file" << std::endl;
@@ -128,7 +135,7 @@ void SDL3Backend::Initialize() {
 
 #ifdef _DEBUG
 	DEBUG_UI.Initialize(window, renderer);
-	
+
 	DEBUG_UI.AddWindow(Application::Instance().GetAppData()->GetAppName(), [this]() {
 		ImGui::Text("Platform: %s", GetPlatformName().c_str());
 		ImGui::Text("Assets File: %s", GetAssetsFileName().c_str());
@@ -138,8 +145,8 @@ void SDL3Backend::Initialize() {
 			ImGui::Checkbox("Resize Display", &Application::Instance().GetAppData()->GetResizeDisplay());
 			ImGui::Checkbox("Dont Center Frame", &Application::Instance().GetAppData()->GetDontCenterFrame());
 		}
-		
-		if(ImGui::CollapsingHeader("Global Variables")) {
+
+		if (ImGui::CollapsingHeader("Global Variables")) {
 			if (ImGui::CollapsingHeader("Values")) {
 				std::vector<int>& altValues = Application::Instance().GetAppData()->GetGlobalValues();
 				for (int i = 0; i < altValues.size(); i++) {
@@ -173,7 +180,7 @@ void SDL3Backend::Initialize() {
 
 			if (ImGui::TreeNode("Object Instances")) {
 				int i = 0;
-				for (auto& [handle, instance] : currentFrame->ObjectInstances) {					
+				for (auto& [handle, instance] : currentFrame->ObjectInstances) {
 					if (ImGui::TreeNode(std::string(instance->Name + "##" + std::to_string(handle)).c_str())) {
 						ImGui::Text("Handle: %d", handle);
 						ImGui::Text("X: %d", instance->X);
@@ -200,7 +207,7 @@ void SDL3Backend::Initialize() {
 				ImGui::TreePop();
 			}
 		}
-	});
+		});
 #endif
 }
 
@@ -217,24 +224,25 @@ void SDL3Backend::Deinitialize()
 	mosaics.clear();
 	imageToMosaic.clear();
 	mosaicToImages.clear();
-
+	std::cout << "Cleared Textures\n";
 	// cleanup text texture cache
 	for (auto& pair : textCache) {
 		SDL_DestroyTexture(pair.second.texture);
 	}
 	textCache.clear();
-
+	std::cout << "Cleared Text Texture Caches\n";
 	// cleanup fonts
 	for (auto& pair : fonts) {
 		TTF_CloseFont(pair.second);
 	}
 	fonts.clear();
 	fontBuffers.clear();
-	
+	std::cout << "Cleared Fonts\n";
 	// Close the Audio Device
 	SDL_PauseAudioDevice(audio_device);
-	SDL_SetAudioStreamGetCallback(masterStream, NULL, NULL);
+	SDL_LockAudioStream(masterStream);
 	SDL_ClearAudioStream(masterStream);
+	SDL_SetAudioStreamGetCallback(masterStream, NULL, NULL);
 	// cleanup audio
 	while (!sampleFiles.empty()) DiscardSampleFile(sampleFiles.begin()->first);
 	for (int i = 1; i < SDL_arraysize(channels); i++) {
@@ -244,15 +252,22 @@ void SDL3Backend::Deinitialize()
 			channels[i].data = nullptr;
 			channels[i].data_len = 0;
 		}
-		SDL_UnbindAudioStream(channels[i].stream);
 		SDL_ClearAudioStream(channels[i].stream);
+		SDL_UnbindAudioStream(channels[i].stream);
 		SDL_DestroyAudioStream(channels[i].stream);
 		channels[i].stream = nullptr;
 	}
+	SDL_UnlockAudioStream(masterStream);
 	SDL_UnbindAudioStream(masterStream);
 	SDL_DestroyAudioStream(masterStream);
+	masterStream = nullptr;
 	SDL_CloseAudioDevice(audio_device);
-	std::cout << "AudioBackend shut down successfully.\n";
+	std::cout << "Cleared Audio.\n";
+	ClearShaders();
+	if (backgroundTexture) { 
+		SDL_DestroyTexture(backgroundTexture);
+		backgroundTexture = nullptr;
+	}
 	if (renderTarget != nullptr) {
 		SDL_DestroyTexture(renderTarget);
 		renderTarget = nullptr;
@@ -261,15 +276,17 @@ void SDL3Backend::Deinitialize()
 	if (renderer != nullptr) {
 		SDL_DestroyRenderer(renderer);
 		renderer = nullptr;
+		std::cout << "Destroyed Renderer\n";
 	}
-	
 	// Destroy the window
 	if (window != nullptr) {
 		SDL_DestroyWindow(window);
 		window = nullptr;
+		std::cout << "Destroyed Window\n";
 	}
 	TTF_Quit();
 	SDL_Quit();
+	std::cout << "Shutdown Backend\n";
 }
 
 bool SDL3Backend::ShouldQuit()
@@ -281,7 +298,7 @@ bool SDL3Backend::ShouldQuit()
 		if (DEBUG_UI.IsEnabled()) {
 			ImGui_ImplSDL3_ProcessEvent(&event);
 		}
-		
+
 		// Toggle debug UI with F1 key
 		if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F1 && event.key.repeat == 0) {
 			DEBUG_UI.ToggleEnabled();
@@ -337,9 +354,9 @@ void SDL3Backend::BeginDrawing()
 			std::cerr << "SDL_CreateTexture Error (resize): " << SDL_GetError() << std::endl;
 		}
 	}
-	
+
 	SDL_SetRenderTarget(renderer, renderTarget);
-	
+
 	SDL_Color borderColor = RGBToSDLColor(Application::Instance().GetAppData()->GetBorderColor());
 	SDL_SetRenderDrawColor(renderer, borderColor.r, borderColor.g, borderColor.b, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(renderer);
@@ -357,11 +374,11 @@ void SDL3Backend::EndDrawing()
 	}
 
 	SDL_SetRenderTarget(renderer, nullptr);
-	
+
 	SDL_Color borderColor = RGBToSDLColor(Application::Instance().GetAppData()->GetBorderColor());
 	SDL_SetRenderDrawColor(renderer, borderColor.r, borderColor.g, borderColor.b, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(renderer);
-	
+
 	SDL_FRect rect = CalculateRenderTargetRect();
 	SDL_RenderTexture(renderer, renderTarget, nullptr, &rect);
 
@@ -400,11 +417,11 @@ void SDL3Backend::LoadTexture(int id) {
 		std::cerr << "LoadTexture Error: " << "Image with id " << id << " has invalid mosaic index" << std::endl;
 		return;
 	}
-	
+
 	if (mosaics.find(mosaicIndex) == mosaics.end()) {
 		char mosaicFileName[32];
 		std::snprintf(mosaicFileName, sizeof(mosaicFileName), "images/m%05d.png", mosaicIndex);
-		
+
 		std::vector<uint8_t> data = pakFile.GetData(mosaicFileName);
 		if (data.empty()) {
 			std::cerr << "PakFile::GetData Error: " << "Mosaic " << mosaicFileName << " not found" << std::endl;
@@ -412,12 +429,51 @@ void SDL3Backend::LoadTexture(int id) {
 		}
 
 		SDL_IOStream* stream = SDL_IOFromMem(data.data(), data.size());
-		SDL_Texture* mosaicTexture = IMG_LoadTexture_IO(renderer, stream, true);
-		if (mosaicTexture == nullptr) {
-			std::cerr << "IMG_LoadTexture_IO Error: " << SDL_GetError() << std::endl;
+		SDL_Surface* loaded = SDL_LoadPNG_IO(stream, true); // Use SDL 3.4.0's new PNG loader
+		if (!loaded) {
+			std::cout << "SDL_LoadPNG_IO Error : " << SDL_GetError() << "\n";
 			return;
 		}
 
+		SDL_Surface* mosaicSurface = SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA8888);
+		if (!mosaicSurface) {
+			std::cout << "SDL_ConvertSurface Error : " << SDL_GetError() << "\n";
+			SDL_DestroySurface(loaded);
+			loaded = nullptr;
+			return;
+		}
+
+		SDL_DestroySurface(loaded);
+		loaded = nullptr;
+
+		SDL_Texture* mosaicTexture = SDL_CreateTextureFromSurface(renderer, mosaicSurface);
+		if (mosaicTexture == nullptr) {
+			std::cerr << "SDL_CreateTextureFromSurface Error: " << SDL_GetError() << std::endl;
+			SDL_DestroySurface(mosaicSurface);
+			mosaicSurface = nullptr;
+			return;
+		}
+		// BUILD COLLISION MASK
+		CollisionMask mask;
+		mask.width = imageInfo->Width;
+		mask.height = imageInfo->Height;
+		mask.isSolid.resize(mask.width * mask.height);
+		SDL_LockSurface(mosaicSurface);
+		Uint8* pixels = static_cast<Uint8*>(mosaicSurface->pixels);
+		int pitch = mosaicSurface->pitch;
+		for (int y = 0; y < mask.height; ++y) {
+			for (int x = 0; x < mask.width; ++x) {
+				int srcX = imageInfo->MosaicX + x;
+				int srcY = imageInfo->MosaicY + y;
+				Uint8* p = pixels + srcY * pitch + srcX * 4;
+				Uint8 alpha = p[3];
+				mask.isSolid[y * mask.width + x] = (alpha != 0);
+			}
+		}
+		SDL_UnlockSurface(mosaicSurface);
+		SDL_DestroySurface(mosaicSurface);
+		mosaicSurface = nullptr;
+		imageInfo->collisionMask = mask;
 		mosaics[mosaicIndex] = mosaicTexture;
 	}
 
@@ -430,11 +486,11 @@ void SDL3Backend::UnloadTexture(int id) {
 	if (mosaicIt == imageToMosaic.end()) {
 		return;
 	}
-	
+
 	int mosaicIndex = mosaicIt->second;
 	mosaicToImages[mosaicIndex].erase(id);
 	imageToMosaic.erase(mosaicIt);
-	
+
 	//if no more images use this mosaic, unload it
 	if (mosaicToImages[mosaicIndex].empty()) {
 		auto mosaicTextureIt = mosaics.find(mosaicIndex);
@@ -446,70 +502,70 @@ void SDL3Backend::UnloadTexture(int id) {
 	}
 }
 
-void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter)
+void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scaleX, int color, int effect, unsigned char effectParameter, float scaleY)
 {
 	auto imageInfo = ImageBank::Instance().GetImage(id);
 	if (!imageInfo) {
 		return;
 	}
-	
+
 	auto mosaicIt = imageToMosaic.find(id);
 	if (mosaicIt == imageToMosaic.end()) {
 		return;
 	}
-	
+
 	int mosaicIndex = mosaicIt->second;
 	auto mosaicTextureIt = mosaics.find(mosaicIndex);
 	if (mosaicTextureIt == mosaics.end()) {
 		return;
 	}
-	
+
 	SDL_Texture* texture = mosaicTextureIt->second;
-	
+
 	SDL_FRect srcRect = {
 		static_cast<float>(imageInfo->MosaicX),
 		static_cast<float>(imageInfo->MosaicY),
 		static_cast<float>(imageInfo->Width),
 		static_cast<float>(imageInfo->Height)
 	};
-	
+
 	// Save original texture properties
 	Uint8 origR, origG, origB, origA;
 	SDL_BlendMode origBlendMode;
 	SDL_GetTextureColorMod(texture, &origR, &origG, &origB);
 	SDL_GetTextureAlphaMod(texture, &origA);
 	SDL_GetTextureBlendMode(texture, &origBlendMode);
-	
+
 	// Apply new color
 	Uint8 r = (color >> 16) & 0xFF;
 	Uint8 g = (color >> 8) & 0xFF;
 	Uint8 b = color & 0xFF;
 	SDL_SetTextureColorMod(texture, r, g, b);
-	
+
 	//get texture dimensions
 	int width = imageInfo->Width;
 	int height = imageInfo->Height;
-	SDL_FRect rect = { static_cast<float>(x - offsetX), static_cast<float>(y - offsetY), static_cast<float>(width), static_cast<float>(height) };
-	
+	SDL_FRect rect = { static_cast<float>(x - offsetX), static_cast<float>(y - offsetY), static_cast<float>(width) * scaleX, static_cast<float>(height) * scaleY };
+
 	//Effects
 	switch (effect) {
-		case 4096:
-		case 0:
-			SDL_SetTextureAlphaMod(texture, 255 - effectParameter);
-			break;
-		case 1: // Semi-Transparent:
-			SDL_SetTextureColorMod(texture, 255, 255, 255);
-			SDL_SetTextureAlphaMod(texture, 255 - effectParameter);
-			break;
-		case 9: // Additive
-			SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_ADD);
-			SDL_SetTextureAlphaMod(texture, 255 - effectParameter);
-			break;
+	case 4096:
+	case 0:
+		SDL_SetTextureAlphaMod(texture, 255 - effectParameter);
+		break;
+	case 1: // Semi-Transparent:
+		SDL_SetTextureColorMod(texture, 255, 255, 255);
+		SDL_SetTextureAlphaMod(texture, 255 - effectParameter);
+		break;
+	case 9: // Additive
+		SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_ADD);
+		SDL_SetTextureAlphaMod(texture, 255 - effectParameter);
+		break;
 	}
 
 	SDL_FPoint center{ static_cast<float>(offsetX), static_cast<float>(offsetY) };
 	SDL_RenderTextureRotated(renderer, texture, &srcRect, &rect, 360 - angle, &center, SDL_FLIP_NONE);
-	
+
 	// Restore original texture properties
 	SDL_SetTextureColorMod(texture, origR, origG, origB);
 	SDL_SetTextureAlphaMod(texture, origA);
@@ -541,32 +597,33 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 			Uint8 r1 = (shape->Color1 >> 16) & 0xFF;
 			Uint8 g1 = (shape->Color1 >> 8) & 0xFF;
 			Uint8 b1 = shape->Color1 & 0xFF;
-			
+
 			Uint8 r2 = (shape->Color2 >> 16) & 0xFF;
 			Uint8 g2 = (shape->Color2 >> 8) & 0xFF;
 			Uint8 b2 = shape->Color2 & 0xFF;
-			
+
 			if (shape->VerticalGradient) {
 				// Vertical gradient (top to bottom)
 				for (int i = 0; i < height; i++) {
 					float ratio = static_cast<float>(i) / static_cast<float>(height);
-					
+
 					Uint8 r = static_cast<Uint8>(r1 + (r2 - r1) * ratio);
 					Uint8 g = static_cast<Uint8>(g1 + (g2 - g1) * ratio);
 					Uint8 b = static_cast<Uint8>(b1 + (b2 - b1) * ratio);
-					
+
 					SDL_SetRenderDrawColor(renderer, r, g, b, SDL_ALPHA_OPAQUE);
 					SDL_RenderLine(renderer, x, y + i, x + width - 1, y + i);
 				}
-			} else {
+			}
+			else {
 				// Horizontal gradient (left to right)
 				for (int i = 0; i < width; i++) {
 					float ratio = static_cast<float>(i) / static_cast<float>(width);
-					
+
 					Uint8 r = static_cast<Uint8>(r1 + (r2 - r1) * ratio);
 					Uint8 g = static_cast<Uint8>(g1 + (g2 - g1) * ratio);
 					Uint8 b = static_cast<Uint8>(b1 + (b2 - b1) * ratio);
-					
+
 					SDL_SetRenderDrawColor(renderer, r, g, b, SDL_ALPHA_OPAQUE);
 					SDL_RenderLine(renderer, x + i, y, x + i, y + height - 1);
 				}
@@ -577,37 +634,37 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 			if (!imageInfo) {
 				return;
 			}
-			
+
 			auto mosaicIt = imageToMosaic.find(shape->Image);
 			if (mosaicIt == imageToMosaic.end()) {
 				return;
 			}
-			
+
 			int mosaicIndex = mosaicIt->second;
 			auto mosaicTextureIt = mosaics.find(mosaicIndex);
 			if (mosaicTextureIt == mosaics.end()) {
 				return;
 			}
-			
+
 			SDL_Texture* texture = mosaicTextureIt->second;
-			
+
 			SDL_FRect baseSrcRect = {
 				static_cast<float>(imageInfo->MosaicX),
 				static_cast<float>(imageInfo->MosaicY),
 				static_cast<float>(imageInfo->Width),
 				static_cast<float>(imageInfo->Height)
 			};
-			
+
 			int textureWidth = imageInfo->Width;
 			int textureHeight = imageInfo->Height;
-			
+
 			// Tile the texture across the entire area
 			for (int tileY = y; tileY < y + height; tileY += textureHeight) {
 				for (int tileX = x; tileX < x + width; tileX += textureWidth) {
 					// Calculate the width and height of this tile (might be smaller at edges)
 					int tileW = std::min(textureWidth, x + width - tileX);
 					int tileH = std::min(textureHeight, y + height - tileY);
-					
+
 					SDL_FRect destRect = { static_cast<float>(tileX), static_cast<float>(tileY), static_cast<float>(tileW), static_cast<float>(tileH) };
 					//adjust source rect for partial tiles
 					SDL_FRect tileSrcRect = {
@@ -621,6 +678,12 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 			}
 		}
 	}
+}
+
+void SDL3Backend::DrawBGTexture(int x, int y, int width, int height, float scaleX, float scaleY)
+{
+	SDL_FRect dest = {x, y, static_cast<float>(width) * scaleX, static_cast<float>(height) * scaleY };
+	SDL_RenderTexture(renderer, backgroundTexture, NULL, &dest);
 }
 
 void SDL3Backend::DrawRectangle(int x, int y, int width, int height, int color)
@@ -648,7 +711,66 @@ void SDL3Backend::DrawPixel(int x, int y, int color)
 	SDL_SetRenderDrawColor(renderer, (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, (color >> 24) & 0xFF);
 	SDL_RenderPoint(renderer, x, y);
 }
-
+void SDL3Backend::CreateShader(std::string name, int numSamplers, int numUniformBuffers, const unsigned char* code, int codeSize) {
+	auto [it, inserted] = shaders.emplace(name, Shaders{});
+	if (!inserted) {
+		std::cout << "Shader already exists: " << name << "\n";
+		return;
+	}
+	Shaders& shader = it->second;
+	shader.Name = name;
+	shader.gpuShader = nullptr;
+	shader.state = nullptr;
+	if (shader.Name == "None") return;
+	std::cout << "Shader Info { Name : " << shader.Name << " | Samplers : " << numSamplers << " | Uniforms : " << numUniformBuffers << " }\n";
+	SDL_GPUShaderFormat formats;
+	SDL_GPUShaderCreateInfo info{};
+	SDL_GPURenderStateCreateInfo createInfo{};
+	formats = SDL_GetGPUShaderFormats(gpuDevice);
+	SDL_zero(info);
+	if (formats & SDL_GPU_SHADERFORMAT_DXIL) info.format = SDL_GPU_SHADERFORMAT_DXIL;
+	else if (formats & SDL_GPU_SHADERFORMAT_MSL) info.format = SDL_GPU_SHADERFORMAT_MSL;
+	else if (formats & SDL_GPU_SHADERFORMAT_SPIRV) info.format = SDL_GPU_SHADERFORMAT_SPIRV;
+	info.code = code;
+	info.code_size = codeSize;
+	info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+	info.num_samplers = numSamplers;
+	info.num_uniform_buffers = numUniformBuffers;
+	shader.gpuShader = SDL_CreateGPUShader(gpuDevice, &info);
+	if (!shader.gpuShader) {
+		std::cout << "SDL_CreateGPUShader failed : " << SDL_GetError() << "\n";
+		return;
+	}
+	SDL_zero(createInfo);
+	createInfo.fragment_shader = shader.gpuShader;
+	shader.state = SDL_CreateGPURenderState(renderer, &createInfo);
+	if (!shader.state) {
+		std::cout << "SDL_CreateGPURenderState failed : " << SDL_GetError() << "\n";
+		SDL_ReleaseGPUShader(gpuDevice, shader.gpuShader);
+		shader.gpuShader = nullptr;
+		shaders.erase(it);
+		return;
+	}
+	shader.numSamplers = numSamplers;
+	shader.numUniformBuffers = numUniformBuffers;
+	std::cout << "Shader Created\n";
+}
+void SDL3Backend::ClearShaders() {
+	for (auto& pair : shaders) {
+		Shaders& allShader = pair.second;
+		if (allShader.gpuShader) {
+			if (allShader.state) { 
+				SDL_DestroyGPURenderState(allShader.state); 
+				allShader.state = nullptr;
+			}
+			SDL_ReleaseGPUShader(gpuDevice, allShader.gpuShader);
+			allShader.gpuShader = nullptr;
+		}
+		else continue;
+	}
+	std::cout << "Cleared Shaders\n";
+	shaders.clear();
+}
 void SDL3Backend::LoadFont(int id)
 {
 	//check if font already exists
@@ -685,7 +807,7 @@ void SDL3Backend::LoadFont(int id)
 		std::cerr << "TTF_OpenFontIO Error: " << SDL_GetError() << std::endl;
 		return;
 	}
-	
+
 	//render flags
 	int renderFlags = TTF_STYLE_NORMAL;
 	if (fontInfo->Weight > 400) {
@@ -699,7 +821,7 @@ void SDL3Backend::LoadFont(int id)
 	}
 	if (fontInfo->Strikeout) {
 		renderFlags |= TTF_STYLE_STRIKETHROUGH;
-	}	
+	}
 
 	TTF_SetFontStyle(font, renderFlags);
 
@@ -728,9 +850,9 @@ void SDL3Backend::UnloadFont(int id)
 				fontBuffers.erase(fontInfo->FontFileName);
 			}
 		}
-		
+
 		ClearTextCacheForFont(id);
-		
+
 		TTF_CloseFont(it->second);
 		fonts.erase(it);
 	}
@@ -766,16 +888,17 @@ void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const st
 	//check cache for texture
 	TextCacheKey cacheKey{ fontInfo->Handle, modifiedText, color, objectHandle };
 	auto cacheIt = textCache.find(cacheKey);
-	
+
 	SDL_Texture* texture = nullptr;
 	int width = 0;
 	int height = 0;
-	
+
 	if (cacheIt != textCache.end()) {
 		texture = cacheIt->second.texture;
 		width = cacheIt->second.width;
 		height = cacheIt->second.height;
-	} else {
+	}
+	else {
 		//something changed in the text, clear texture cache for this object
 		if (objectHandle != -1) {
 			auto it = textCache.begin();
@@ -783,12 +906,13 @@ void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const st
 				if (it->first.objectHandle == objectHandle) {
 					SDL_DestroyTexture(it->second.texture);
 					it = textCache.erase(it);
-				} else {
+				}
+				else {
 					++it;
 				}
 			}
 		}
-		
+
 		SDL_Surface* surface = TTF_RenderText_Blended_Wrapped(font, modifiedText.c_str(), 0, RGBToSDLColor(color), 0);
 		if (surface == nullptr) {
 			std::cerr << "TTF_RenderText_Blended_Wrapped Error: " << SDL_GetError() << std::endl;
@@ -804,18 +928,18 @@ void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const st
 
 		width = surface->w;
 		height = surface->h;
-		
+
 		if (textCache.size() >= 256) {
 			RemoveOldTextCache();
 		}
-		
+
 		//cache the texture
 		CachedText cached;
 		cached.texture = texture;
 		cached.width = width;
 		cached.height = height;
 		textCache[cacheKey] = cached;
-		
+
 		SDL_DestroySurface(surface);
 	}
 
@@ -841,7 +965,8 @@ void SDL3Backend::ClearTextCacheForFont(int fontHandle)
 		if (it->first.fontHandle == fontHandle) {
 			SDL_DestroyTexture(it->second.texture);
 			it = textCache.erase(it);
-		} else {
+		}
+		else {
 			++it;
 		}
 	}
@@ -930,6 +1055,11 @@ bool SDL3Backend::LoadSample(int id, int channel) {
 	return true;
 }
 bool SDL3Backend::LoadSampleFile(std::string path) {
+	auto it = sampleFiles.find(path);
+	if (it != sampleFiles.end()) {
+		std::cout << "Sample File already loaded, returning true.\n";
+		return true;
+	}
 	std::cout << "Loading Sample File : " << path << "\n";
 	std::filesystem::path fullPath = path;
 	std::string type = fullPath.extension().string();
@@ -959,6 +1089,35 @@ bool SDL3Backend::LoadSampleFile(std::string path) {
 		free(output);
 		std::cout << "Loaded OGG file : " << path << "\n";
 	}
+	else if (type == ".mp3") {
+		drmp3 mp3;
+		if (!drmp3_init_file(&mp3, path.c_str(), NULL)) {
+			std::cout << "Failed to open MP3 file\n";
+			drmp3_uninit(&mp3);
+			return false;
+		}
+		drmp3_uint64 frameCount = drmp3_get_pcm_frame_count(&mp3);
+		if (frameCount == 0) {
+			std::cout << "No sample frames in MP3\n";
+			drmp3_uninit(&mp3);
+			return false;
+		}
+		int totalSamples = static_cast<int>(frameCount * mp3.channels);
+		Uint32 dataLen = totalSamples * sizeof(int16_t);
+		sampleFile.data = (Uint8*)SDL_malloc(dataLen);
+		drmp3_uint64 framesRead = drmp3_read_pcm_frames_s16(&mp3, frameCount, (drmp3_int16*)sampleFile.data);
+		if (!sampleFile.data) {
+			std::cout << "Bad MP3 Data\n";
+			SDL_free(sampleFile.data);
+			drmp3_uninit(&mp3);
+			return false;
+		}
+		sampleFile.data_len = dataLen;
+		sampleFile.spec.channels = mp3.channels;
+		sampleFile.spec.format = SDL_AUDIO_S16;
+		sampleFile.spec.freq = mp3.sampleRate;
+		drmp3_uninit(&mp3);
+	}
 	else {
 		std::cout << "Audio File" << type << "not supported.\n";
 		return false;
@@ -978,32 +1137,34 @@ int SDL3Backend::FindSample(std::string name) {
 
 void SDL3Backend::PlaySample(int id, int channel, int loops, int freq, bool uninterruptable, float volume, float pan) {
 	bool replaceSample = false;
-	bool channelsFilled = false;
-	bool channelFound = false;
 	if (channel < 1 || channel >= SDL_arraysize(channels)) {
-		for (int i = 1; i < SDL_arraysize(channels); i++) {
-			if (!channels[i].stream || !channels[i].data || !channels[i].lock) {
-				channel = i;
-				channelFound = true;
+		int loopChannel = 0;
+		for (loopChannel = 1; loopChannel < SDL_arraysize(channels); loopChannel++) {
+			if (!channels[loopChannel].lock || channels[loopChannel].curHandle < 0) {
 				break;
 			}
 		}
-		if (!channelFound) {
-			channelsFilled = true;
-			channel = 48;
+		if (loopChannel == 48) {
+			for (loopChannel = 0; loopChannel < SDL_arraysize(channels); loopChannel++) {
+				if (!channels[loopChannel].lock) {
+					StopSample(loopChannel, true);
+					break;
+				}
+			}
 		}
+		channel = loopChannel;
 		channels[channel].uninterruptable = uninterruptable;
 	}
 	else { // Channel is given.
 		channels[channel].uninterruptable = uninterruptable;
 		if (channels[channel].uninterruptable) replaceSample = true;
 	}
-	if (replaceSample) {
-		StopSample(channel, true);
-	}
-	if (!LoadSample(id, channel)) return;
 
-	if (channels[channel].stream) StopSample(channel, true);
+	if (replaceSample) StopSample(channel, true);
+	if (!LoadSample(id, channel)) {
+		std::cout << "Failed to load sound\n";
+		return;
+	}
 	channels[channel].stream = SDL_CreateAudioStream(&channels[channel].spec, &spec);
 	if (!channels[channel].stream) {
 		std::cerr << "SDL_CreateAudioStream error : " << SDL_GetError() << "\n";
@@ -1020,11 +1181,11 @@ void SDL3Backend::PlaySample(int id, int channel, int loops, int freq, bool unin
 		}
 	}
 	if (volume > -1) channels[channel].volume = volume;
-	if (pan != -2 ) channels[channel].pan = pan;
+	if (pan != -2) channels[channel].pan = pan;
 	if (freq > 0 || freq != NULL) SetSampleFreq(freq, channel, true);
 	channels[channel].curHandle = id;
 	SetSampleVolume(mainVol, channel, true); // Set volume to the main one.
-	
+
 	std::cout << "Sample ID " << id << " is now playing at channel " << channel << ".\n";
 }
 void SDL3Backend::PlaySampleFile(std::string path, int channel, int loops) {
@@ -1093,7 +1254,7 @@ bool SDL3Backend::SampleState(int id, bool channel, bool pause) {
 				}
 				if (!channels[i].stream && !pause) return true;
 			}
-			else { 
+			else {
 				if (!pause) return true;
 				else return false;
 			}
@@ -1202,7 +1363,7 @@ void SDL3Backend::SetSampleVolume(float volume, int id, bool channel) {
 			else {
 				mainVol = (volume / 100) * channels[id].volume;
 				channels[id].volume = mainVol;
-			}	
+			}
 		}
 	}
 	if (id > -1 && !channel) { // Set Sample Volume
@@ -1263,6 +1424,7 @@ void SDL3Backend::StopSample(int id, bool channel) {
 		if (id < 1 || id >= SDL_arraysize(channels)) return;
 		if (channels[id].stream) {
 			std::cout << "Stopping Sample : " << id << "\n";
+			SDL_ClearAudioStream(channels[channel].stream);
 			SDL_UnbindAudioStream(channels[id].stream);
 			SDL_DestroyAudioStream(channels[id].stream);
 			channels[id].stream = nullptr;
@@ -1321,7 +1483,7 @@ SDL_FRect SDL3Backend::CalculateRenderTargetRect()
 	// get actual current window size
 	int currentWindowWidth, currentWindowHeight;
 	SDL_GetWindowSize(window, &currentWindowWidth, &currentWindowHeight);
-	
+
 	// get app size
 	int renderTargetWidth = std::min(Application::Instance().GetAppData()->GetWindowWidth(), Application::Instance().GetCurrentFrame()->Width);
 	int renderTargetHeight = std::min(Application::Instance().GetAppData()->GetWindowHeight(), Application::Instance().GetCurrentFrame()->Height);
@@ -1349,7 +1511,7 @@ SDL_FRect SDL3Backend::CalculateRenderTargetRect()
 		rect.x = static_cast<float>((currentWindowWidth - static_cast<int>(rect.w)) / 2);
 		rect.y = static_cast<float>((currentWindowHeight - static_cast<int>(rect.h)) / 2);
 	}
-	
+
 	return rect;
 }
 
@@ -1365,7 +1527,7 @@ int SDL3Backend::GetMouseX()
 	float mouseX;
 	SDL_GetMouseState(&mouseX, NULL);
 #endif
-	
+
 	//get mouse position relative to render target
 	SDL_FRect rect = CalculateRenderTargetRect();
 	int windowWidth = std::min(Application::Instance().GetAppData()->GetWindowWidth(), Application::Instance().GetCurrentFrame()->Width);
@@ -1397,10 +1559,10 @@ void SDL3Backend::SetMouseX(int x)
 {
 	SDL_FRect rect = CalculateRenderTargetRect();
 	int renderTargetWidth = std::min(Application::Instance().GetAppData()->GetWindowWidth(), Application::Instance().GetCurrentFrame()->Width);
-	
+
 	float windowX = rect.x + (x * rect.w / renderTargetWidth);
 	float windowY;
-	
+
 	SDL_GetMouseState(NULL, &windowY);
 	SDL_WarpMouseInWindow(window, windowX, windowY);
 }
@@ -1409,10 +1571,10 @@ void SDL3Backend::SetMouseY(int y)
 {
 	SDL_FRect rect = CalculateRenderTargetRect();
 	int renderTargetHeight = std::min(Application::Instance().GetAppData()->GetWindowHeight(), Application::Instance().GetCurrentFrame()->Height);
-	
+
 	float windowX;
 	float windowY = rect.y + (y * rect.h / renderTargetHeight);
-	
+
 	SDL_GetMouseState(&windowX, NULL);
 	SDL_WarpMouseInWindow(window, windowX, windowY);
 }
@@ -1467,196 +1629,196 @@ int SDL3Backend::FusionToSDLKey(short key)
 {
 	switch (key)
 	{
-		default:
-			return SDL_SCANCODE_UNKNOWN;
-		case 0x08:
-			return SDL_SCANCODE_BACKSPACE;
-		case 0x09:
-			return SDL_SCANCODE_TAB;
-		case 0x0D:
-			return SDL_SCANCODE_RETURN;
-		case 0x10:
-			return SDL_SCANCODE_LSHIFT;
-		case 0x11:
-			return SDL_SCANCODE_LCTRL;
-		case 0x13:
-			return SDL_SCANCODE_PAUSE;
-		case 0x14:
-			return SDL_SCANCODE_CAPSLOCK;
-		case 0x1B:
-			return SDL_SCANCODE_ESCAPE;
-		case 0x20:
-			return SDL_SCANCODE_SPACE;
-		case 0x21:
-			return SDL_SCANCODE_PAGEUP;
-		case 0x22:
-			return SDL_SCANCODE_PAGEDOWN;
-		case 0x23:
-			return SDL_SCANCODE_END;
-		case 0x24:
-			return SDL_SCANCODE_HOME;
-		case 0x25:
-			return SDL_SCANCODE_LEFT;
-		case 0x26:
-			return SDL_SCANCODE_UP;
-		case 0x27:
-			return SDL_SCANCODE_RIGHT;
-		case 0x28:
-			return SDL_SCANCODE_DOWN;
-		case 0x2D:
-			return SDL_SCANCODE_INSERT;
-		case 0x2E:
-			return SDL_SCANCODE_DELETE;
-		case 0x30:
-			return SDL_SCANCODE_0;
-		case 0x31:
-			return SDL_SCANCODE_1;
-		case 0x32:
-			return SDL_SCANCODE_2;
-		case 0x33:
-			return SDL_SCANCODE_3;
-		case 0x34:
-			return SDL_SCANCODE_4;
-		case 0x35:
-			return SDL_SCANCODE_5;
-		case 0x36:
-			return SDL_SCANCODE_6;
-		case 0x37:
-			return SDL_SCANCODE_7;
-		case 0x38:
-			return SDL_SCANCODE_8;
-		case 0x39:
-			return SDL_SCANCODE_9;
-		case 0x41:
-			return SDL_SCANCODE_A;
-		case 0x42:
-			return SDL_SCANCODE_B;
-		case 0x43:
-			return SDL_SCANCODE_C;
-		case 0x44:
-			return SDL_SCANCODE_D;
-		case 0x45:
-			return SDL_SCANCODE_E;
-		case 0x46:
-			return SDL_SCANCODE_F;
-		case 0x47:
-			return SDL_SCANCODE_G;
-		case 0x48:
-			return SDL_SCANCODE_H;
-		case 0x49:
-			return SDL_SCANCODE_I;
-		case 0x4A:
-			return SDL_SCANCODE_J;
-		case 0x4B:
-			return SDL_SCANCODE_K;
-		case 0x4C:
-			return SDL_SCANCODE_L;
-		case 0x4D:
-			return SDL_SCANCODE_M;
-		case 0x4E:
-			return SDL_SCANCODE_N;
-		case 0x4F:
-			return SDL_SCANCODE_O;
-		case 0x50:
-			return SDL_SCANCODE_P;
-		case 0x51:
-			return SDL_SCANCODE_Q;
-		case 0x52:
-			return SDL_SCANCODE_R;
-		case 0x53:
-			return SDL_SCANCODE_S;
-		case 0x54:
-			return SDL_SCANCODE_T;
-		case 0x55:
-			return SDL_SCANCODE_U;
-		case 0x56:
-			return SDL_SCANCODE_V;
-		case 0x57:
-			return SDL_SCANCODE_W;
-		case 0x58:
-			return SDL_SCANCODE_X;
-		case 0x59:
-			return SDL_SCANCODE_Y;
-		case 0x5A:
-			return SDL_SCANCODE_Z;
-		case 0x60:
-			return SDL_SCANCODE_KP_0;
-		case 0x61:
-			return SDL_SCANCODE_KP_1;
-		case 0x62:
-			return SDL_SCANCODE_KP_2;
-		case 0x63:
-			return SDL_SCANCODE_KP_3;
-		case 0x64:
-			return SDL_SCANCODE_KP_4;
-		case 0x65:
-			return SDL_SCANCODE_KP_5;
-		case 0x66:
-			return SDL_SCANCODE_KP_6;
-		case 0x67:
-			return SDL_SCANCODE_KP_7;
-		case 0x68:
-			return SDL_SCANCODE_KP_8;
-		case 0x69:
-			return SDL_SCANCODE_KP_9;
-		case 0x6A:
-			return SDL_SCANCODE_KP_MULTIPLY;
-		case 0x6B:
-			return SDL_SCANCODE_KP_PLUS;
-		case 0x6D:
-			return SDL_SCANCODE_KP_MINUS;
-		case 0x6E:
-			return SDL_SCANCODE_KP_PERIOD;
-		case 0x6F:
-			return SDL_SCANCODE_KP_DIVIDE;
-		case 0x70:
-			return SDL_SCANCODE_F1;
-		case 0x71:
-			return SDL_SCANCODE_F2;
-		case 0x72:
-			return SDL_SCANCODE_F3;
-		case 0x73:
-			return SDL_SCANCODE_F4;
-		case 0x74:
-			return SDL_SCANCODE_F5;
-		case 0x75:
-			return SDL_SCANCODE_F6;
-		case 0x76:
-			return SDL_SCANCODE_F7;
-		case 0x77:
-			return SDL_SCANCODE_F8;
-		case 0x78:
-			return SDL_SCANCODE_F9;
-		case 0x79:
-			return SDL_SCANCODE_F10;
-		case 0x7A:
-			return SDL_SCANCODE_F11;
-		case 0x7B:
-			return SDL_SCANCODE_F12;
-		case 0x90:
-			return SDL_SCANCODE_NUMLOCKCLEAR;
-		case 0xBA:
-			return SDL_SCANCODE_SEMICOLON;
-		case 0xBB:
-			return SDL_SCANCODE_EQUALS;
-		case 0xBC:
-			return SDL_SCANCODE_COMMA;
-		case 0xBD:
-			return SDL_SCANCODE_MINUS;
-		case 0xBE:
-			return SDL_SCANCODE_PERIOD;
-		case 0xBF:
-			return SDL_SCANCODE_SLASH;
-		case 0xC0:
-			return SDL_SCANCODE_GRAVE;
-		case 0xDB:
-			return SDL_SCANCODE_LEFTBRACKET;
-		case 0xDC:
-			return SDL_SCANCODE_BACKSLASH;
-		case 0xDD:
-			return SDL_SCANCODE_RIGHTBRACKET;
-		case 0xDE:
-			return SDL_SCANCODE_APOSTROPHE;
+	default:
+		return SDL_SCANCODE_UNKNOWN;
+	case 0x08:
+		return SDL_SCANCODE_BACKSPACE;
+	case 0x09:
+		return SDL_SCANCODE_TAB;
+	case 0x0D:
+		return SDL_SCANCODE_RETURN;
+	case 0x10:
+		return SDL_SCANCODE_LSHIFT;
+	case 0x11:
+		return SDL_SCANCODE_LCTRL;
+	case 0x13:
+		return SDL_SCANCODE_PAUSE;
+	case 0x14:
+		return SDL_SCANCODE_CAPSLOCK;
+	case 0x1B:
+		return SDL_SCANCODE_ESCAPE;
+	case 0x20:
+		return SDL_SCANCODE_SPACE;
+	case 0x21:
+		return SDL_SCANCODE_PAGEUP;
+	case 0x22:
+		return SDL_SCANCODE_PAGEDOWN;
+	case 0x23:
+		return SDL_SCANCODE_END;
+	case 0x24:
+		return SDL_SCANCODE_HOME;
+	case 0x25:
+		return SDL_SCANCODE_LEFT;
+	case 0x26:
+		return SDL_SCANCODE_UP;
+	case 0x27:
+		return SDL_SCANCODE_RIGHT;
+	case 0x28:
+		return SDL_SCANCODE_DOWN;
+	case 0x2D:
+		return SDL_SCANCODE_INSERT;
+	case 0x2E:
+		return SDL_SCANCODE_DELETE;
+	case 0x30:
+		return SDL_SCANCODE_0;
+	case 0x31:
+		return SDL_SCANCODE_1;
+	case 0x32:
+		return SDL_SCANCODE_2;
+	case 0x33:
+		return SDL_SCANCODE_3;
+	case 0x34:
+		return SDL_SCANCODE_4;
+	case 0x35:
+		return SDL_SCANCODE_5;
+	case 0x36:
+		return SDL_SCANCODE_6;
+	case 0x37:
+		return SDL_SCANCODE_7;
+	case 0x38:
+		return SDL_SCANCODE_8;
+	case 0x39:
+		return SDL_SCANCODE_9;
+	case 0x41:
+		return SDL_SCANCODE_A;
+	case 0x42:
+		return SDL_SCANCODE_B;
+	case 0x43:
+		return SDL_SCANCODE_C;
+	case 0x44:
+		return SDL_SCANCODE_D;
+	case 0x45:
+		return SDL_SCANCODE_E;
+	case 0x46:
+		return SDL_SCANCODE_F;
+	case 0x47:
+		return SDL_SCANCODE_G;
+	case 0x48:
+		return SDL_SCANCODE_H;
+	case 0x49:
+		return SDL_SCANCODE_I;
+	case 0x4A:
+		return SDL_SCANCODE_J;
+	case 0x4B:
+		return SDL_SCANCODE_K;
+	case 0x4C:
+		return SDL_SCANCODE_L;
+	case 0x4D:
+		return SDL_SCANCODE_M;
+	case 0x4E:
+		return SDL_SCANCODE_N;
+	case 0x4F:
+		return SDL_SCANCODE_O;
+	case 0x50:
+		return SDL_SCANCODE_P;
+	case 0x51:
+		return SDL_SCANCODE_Q;
+	case 0x52:
+		return SDL_SCANCODE_R;
+	case 0x53:
+		return SDL_SCANCODE_S;
+	case 0x54:
+		return SDL_SCANCODE_T;
+	case 0x55:
+		return SDL_SCANCODE_U;
+	case 0x56:
+		return SDL_SCANCODE_V;
+	case 0x57:
+		return SDL_SCANCODE_W;
+	case 0x58:
+		return SDL_SCANCODE_X;
+	case 0x59:
+		return SDL_SCANCODE_Y;
+	case 0x5A:
+		return SDL_SCANCODE_Z;
+	case 0x60:
+		return SDL_SCANCODE_KP_0;
+	case 0x61:
+		return SDL_SCANCODE_KP_1;
+	case 0x62:
+		return SDL_SCANCODE_KP_2;
+	case 0x63:
+		return SDL_SCANCODE_KP_3;
+	case 0x64:
+		return SDL_SCANCODE_KP_4;
+	case 0x65:
+		return SDL_SCANCODE_KP_5;
+	case 0x66:
+		return SDL_SCANCODE_KP_6;
+	case 0x67:
+		return SDL_SCANCODE_KP_7;
+	case 0x68:
+		return SDL_SCANCODE_KP_8;
+	case 0x69:
+		return SDL_SCANCODE_KP_9;
+	case 0x6A:
+		return SDL_SCANCODE_KP_MULTIPLY;
+	case 0x6B:
+		return SDL_SCANCODE_KP_PLUS;
+	case 0x6D:
+		return SDL_SCANCODE_KP_MINUS;
+	case 0x6E:
+		return SDL_SCANCODE_KP_PERIOD;
+	case 0x6F:
+		return SDL_SCANCODE_KP_DIVIDE;
+	case 0x70:
+		return SDL_SCANCODE_F1;
+	case 0x71:
+		return SDL_SCANCODE_F2;
+	case 0x72:
+		return SDL_SCANCODE_F3;
+	case 0x73:
+		return SDL_SCANCODE_F4;
+	case 0x74:
+		return SDL_SCANCODE_F5;
+	case 0x75:
+		return SDL_SCANCODE_F6;
+	case 0x76:
+		return SDL_SCANCODE_F7;
+	case 0x77:
+		return SDL_SCANCODE_F8;
+	case 0x78:
+		return SDL_SCANCODE_F9;
+	case 0x79:
+		return SDL_SCANCODE_F10;
+	case 0x7A:
+		return SDL_SCANCODE_F11;
+	case 0x7B:
+		return SDL_SCANCODE_F12;
+	case 0x90:
+		return SDL_SCANCODE_NUMLOCKCLEAR;
+	case 0xBA:
+		return SDL_SCANCODE_SEMICOLON;
+	case 0xBB:
+		return SDL_SCANCODE_EQUALS;
+	case 0xBC:
+		return SDL_SCANCODE_COMMA;
+	case 0xBD:
+		return SDL_SCANCODE_MINUS;
+	case 0xBE:
+		return SDL_SCANCODE_PERIOD;
+	case 0xBF:
+		return SDL_SCANCODE_SLASH;
+	case 0xC0:
+		return SDL_SCANCODE_GRAVE;
+	case 0xDB:
+		return SDL_SCANCODE_LEFTBRACKET;
+	case 0xDC:
+		return SDL_SCANCODE_BACKSLASH;
+	case 0xDD:
+		return SDL_SCANCODE_RIGHTBRACKET;
+	case 0xDE:
+		return SDL_SCANCODE_APOSTROPHE;
 	}
 }
 
@@ -1678,70 +1840,12 @@ bool SDL3Backend::IsPixelTransparent(int textureId, int x, int y)
 {
 	auto imageInfo = ImageBank::Instance().GetImage(textureId);
 	if (!imageInfo) return true;
-
-	auto mosaicIt = imageToMosaic.find(textureId);
-	if (mosaicIt == imageToMosaic.end()) return true;
-	
-	int mosaicIndex = mosaicIt->second;
-	auto mosaicTextureIt = mosaics.find(mosaicIndex);
-	if (mosaicTextureIt == mosaics.end()) return true;
-	
-	SDL_Texture* texture = mosaicTextureIt->second;
-	
-	SDL_FRect srcRect = {
-		static_cast<float>(imageInfo->MosaicX),
-		static_cast<float>(imageInfo->MosaicY),
-		static_cast<float>(imageInfo->Width),
-		static_cast<float>(imageInfo->Height)
-	};
-
-	int width = imageInfo->Width;
-	int height = imageInfo->Height;
-
-	if (x < 0 || x >= width || y < 0 || y >= height) return true;
-
-	// Create a surface to read the texture data
-	SDL_Surface* surface = SDL_CreateSurface(width, height, SDL_GetPixelFormatForMasks(32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000));
-	if (!surface) return true;
-
-	// Create a temporary render target
-	SDL_Texture* tempTarget = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, width, height);
-	if (!tempTarget) {
-		SDL_DestroySurface(surface);
-		return true;
-	}
-
-	// Save the current render target
-	SDL_Texture* currentTarget = SDL_GetRenderTarget(renderer);
-
-	// Set the temporary render target
-	SDL_SetRenderTarget(renderer, tempTarget);
-
-	// Copy the original texture to the temporary target
-	SDL_FRect destRect = { 0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height) };
-	SDL_RenderTexture(renderer, texture, &srcRect, &destRect);
-
-	// Read the pixels from the temporary target
-	SDL_Rect rect = { 0, 0, width, height };
-	SDL_Surface* surface2 = SDL_RenderReadPixels(renderer, &rect);
-
-	// Restore the original render target
-	SDL_SetRenderTarget(renderer, currentTarget);
-
-	// Get the pixel data
-	Uint32* pixels = static_cast<Uint32*>(surface2->pixels);
-	Uint32 pixel = pixels[y * width + x];
-	
-	// Check alpha channel
-	bool isTransparent = (pixel & 0xFF000000) == 0;
-
-	// Clean up
-	SDL_DestroyTexture(tempTarget);
-	SDL_DestroySurface(surface);
-	SDL_DestroySurface(surface2);
-
-	return isTransparent;
+	if (x < 0 || y < 0 || x >= imageInfo->Width || y >= imageInfo->Height) return true; //by taking account of padding, we can assume the outside pixels are transparent
+	const CollisionMask& mask = imageInfo->collisionMask;
+	if (mask.isSolid.empty()) return true;
+	return mask.isSolid[y * mask.width + x] == 0; //now that a mask has been made, this can be simplified easily
 }
+
 
 void SDL3Backend::GetTextureDimensions(int textureId, int& width, int& height)
 {

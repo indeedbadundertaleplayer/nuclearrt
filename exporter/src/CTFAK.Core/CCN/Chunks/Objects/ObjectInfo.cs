@@ -101,10 +101,12 @@ namespace CTFAK.CCN.Chunks.Objects
 					case 17480:
 						try
 						{
+							Logger.Log($"Checking Shader");
 							var shaderHandle = chunkReader.ReadInt32();
 							var numberOfParams = chunkReader.ReadInt32();
 							var shdr = CTFAKCore.currentReader.getGameData().shaders.ShaderList[shaderHandle];
 							shaderData.name = shdr.Name;
+							Logger.Log($"Shader Name : {shdr.Name}");
 							shaderData.ShaderHandle = shaderHandle;
 							shaderData.hasShader = true;
 
@@ -138,8 +140,9 @@ namespace CTFAK.CCN.Chunks.Objects
 								});
 							}
 						}
-						catch
+						catch (Exception ex)
 						{
+							Logger.Log($"No Shader Found: {ex.Message}");
 							shaderData.hasShader = false;
 						}
 						break;

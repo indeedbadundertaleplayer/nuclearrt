@@ -8,7 +8,7 @@
 #include <memory>
 #include "Layer.h"
 #include "CounterBase.h"
-
+#include "ShaderFactory.h"
 class Frame {
 public:
 	Frame() = default;
@@ -21,7 +21,19 @@ public:
 	int Height = 0;
 
 	int BackgroundColor = 0;
-
+	std::unique_ptr<Shader> frameShader = std::make_unique<None>();
+	void SetShader(const std::string& newShader) {
+		auto it = shaderFactory.find(newShader);
+		if (it == shaderFactory.end()) return;
+		frameShader = shaderFactory.at(newShader)();
+		std::cout << "Shader Code Size : " << frameShader->codeSize << "\n";
+		Application::Instance().GetBackend()->CreateShader(newShader, frameShader->numSamplers, frameShader->numUniformBuffers, frameShader->code, frameShader->codeSize);
+	}
+	void SetShaderParam(std::string name, float value) {
+		frameShader->SetParameter(name, value);
+		Application::Instance().GetBackend()->SetFragmentUniforms(name, 0, frameShader->GetData(), sizeof(frameShader->GetData()));
+	}
+	float GetShaderParam(std::string name) {return frameShader->GetParameter(name);}
 	std::vector<Layer> Layers;
 
 	std::unordered_map<unsigned int, ObjectInstance*> ObjectInstances;

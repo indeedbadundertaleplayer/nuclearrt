@@ -68,6 +68,7 @@ public class ExpressionConverter
         { (ObjectType.Game, 10), _ => "Application::Instance().GetAppData()->GetTargetFPS()" }, // FrameRate // TODO: Verify this
         { (ObjectType.Game, 14), _ => "0" }, // DisplayMode // TODO
         { (ObjectType.Game, 15), _ => "0" }, // PixelShaderVersion // TODO
+		{ (ObjectType.Game, 18), e => "GetShaderParam(" },
 
 		//Speaker
 		{ (ObjectType.Speaker, 0), _ => "Application::Instance().GetBackend()->GetSampleVolume(-1, false)" }, // Main Volume
@@ -102,6 +103,7 @@ public class ExpressionConverter
 		{ (ObjectType.System, 23), e => (e.Loader as DoubleExp).FloatValue.ToString() },
 		{ (ObjectType.System, 29), _ => "std::abs(" }, // Abs(
         { (ObjectType.System, 41), _ => "std::max(" }, // Max(
+		{ (ObjectType.System, 42), e => $"Application::Instance().GetColor({(e.Loader as Colour)}" }, // GetRGB(
         { (ObjectType.System, 46), _ => "Loopindex(" }, // LoopIndex
 		{ (ObjectType.System, 50), e => $"Application::Instance().GetAppData()->GetGlobalStrings()[{(e.Loader as GlobalCommon).Value}]" },
 		{ (ObjectType.System, 56), _ => "\"\"" }, // AppTempPath$ // TODO
@@ -165,6 +167,13 @@ public class ExpressionConverter
 					else
 						return stringBuilder.Append($"({GetSelector(expression.ObjectInfo)}->Count() > 0 ? (({GetObjectClassName(expression.ObjectInfo)}*)*({GetSelector(expression.ObjectInfo)}->begin()))->Values.GetValue({((ShortExp)expression.Loader).Value}) : 0)");
 				}
+			/*case 29: // Get Shader Param
+				Logger.Log($"Expression : {expression.Loader}");
+				if (expression.ObjectInfo == eventBase.ObjectInfo && expression.ObjectInfoList == eventBase.ObjectInfoList)
+					return stringBuilder.Append($"instance->GetShaderParam({((StringExp)expression.Loader).Value})");
+				else
+					return stringBuilder.Append($"({GetSelector(expression.ObjectInfo)}->Count() > 0 ? (*{GetSelector(expression.ObjectInfo)}->begin())->GetShaderParam({((StringExp)expression.Loader).Value}) : 0)");
+			*/
 		}
 
 

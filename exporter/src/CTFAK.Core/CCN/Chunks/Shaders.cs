@@ -80,7 +80,7 @@ namespace CTFAK.MMFParser.EXE.Loaders
 					parameter.Name = reader.ReadAscii();
 				}
 			}
-			ShaderGenerator.CreateAndDumpShader(this);
+			//ShaderGenerator.CreateAndDumpShader(this); // Not Needed.
 		}
 	}
 

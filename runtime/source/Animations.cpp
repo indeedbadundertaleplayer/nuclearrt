@@ -133,6 +133,7 @@ void Animations::SetCurrentDirection(int index) {
 		CurrentFrameIndex = 0; // Reset frame when changing direction
 		CurrentFrameTime = 0.0f; // Reset frame time
 	}
+	animationSpeed = currentSequence->Directions[CurrentDirection]->MaximumSpeed;
 }
 
 void Animations::SetCurrentFrameIndex(int index) {
@@ -195,6 +196,8 @@ void Animations::SetForcedDirection(int directionMask) {
 	forcedDirection = newDirection;
 	CurrentFrameIndex = 0;
 	CurrentFrameTime = 0.0f;
+	animationSpeed = sequence->Directions[newDirection]->MaximumSpeed;
+
 }
 
 void Animations::RestoreForcedSequence() {
@@ -254,18 +257,14 @@ void Animations::Update(float deltaTime) {
 	}
 	auto& currentDirection = currentSequence->Directions.at(displayDirection);
 
-	int animSpeed = currentDirection->MaximumSpeed; // TODO: look at minimum speed too
+	//int animSpeed = currentDirection->MaximumSpeed; // TODO: look at minimum speed too
 
-	if (animSpeed == 0) {
-		return;
-	}
+	if (animationSpeed == 0) return;
+	
+	if (forcedSpeed == animationSpeed) forcedSpeed = animationSpeed;
+	if (!started) return; // If the animation is stopped, we don't update the frame time or index
 
-	if (!started) {
-		// If the animation is stopped, we don't update the frame time or index
-		return;
-	}
-
-	if (CurrentFrameTime >= 1.0f / animSpeed) {
+	if (CurrentFrameTime >= 1.0f / forcedSpeed) {
 
 		//TODO: verify if this is correct
 		if (forcedFrame != -1) return; // If a forced frame is set, don't update the index

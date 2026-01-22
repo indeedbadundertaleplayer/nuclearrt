@@ -8,7 +8,7 @@
 #include <functional>
 #include <algorithm>
 #include <type_traits>
-
+#include <cstdint>
 #include "AppData.h"
 #include "Backend.h"
 #include "GameState.h"
@@ -52,7 +52,9 @@ public:
 
 	short Random(short max);
 	short RandomRange(short min, short max);
-
+	int GetColor(uint8_t r, uint8_t g, uint8_t b) {
+		return r << 16 | g << 8 | b;
+	}
 	Application();
 	~Application();
 	Application(const Application&) = delete;
