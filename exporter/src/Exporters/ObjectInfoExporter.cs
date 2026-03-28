@@ -72,9 +72,11 @@ public class ObjectInfoExporter : BaseExporter
 		string additionalParameters = "";
 		if (objectInfo.ObjectType >= 32)
 		{
+			
 			objectTypeClass = "Extension";
 			if (objectInfo.properties is ObjectCommon common)
 			{
+				Logger.Log($"Extension Identifier : {common.Identifier}");
 				ExtensionExporter extensionExporter = ExtensionExporterRegistry.GetExporter(common.Identifier);
 				if (extensionExporter != null)
 				{
@@ -150,6 +152,8 @@ public class ObjectInfoExporter : BaseExporter
 			result.AppendLine($"((Active*)instance)->Flags = {BuildAlterableFlags(common)};");
 			result.AppendLine($"((Active*)instance)->movements = {BuildMovements(common)};");
 			result.AppendLine($"instance->SetShader(\"{common.Parent.shaderData.name}\");");
+			result.AppendLine($"((Active*)instance)->FadeIn = std::make_unique<Transition>(\"{common.transition.Name}\", {common.transition.Duration}, {common.transition.Color.ToArgb()}, {common.transition.Flags});");
+			result.AppendLine($"((Active*)instance)->FadeOut = std::make_unique<Transition>(\"{common.transition2.Name}\", {common.transition2.Duration}, {common.transition2.Color.ToArgb()}, {common.transition2.Flags});");
 			foreach (var i in common.Parent.shaderData.parameters) result.AppendLine($"instance->SetShaderParam({i.Name}, {i.Value});");
 
 			

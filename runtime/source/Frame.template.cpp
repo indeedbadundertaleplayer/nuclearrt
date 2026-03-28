@@ -15,7 +15,8 @@ void GeneratedFrame{{ FRAME_INDEX }}::Initialize() {
 	Width = {{ FRAME_WIDTH }};
 	Height = {{ FRAME_HEIGHT }};
 	BackgroundColor = {{ FRAME_BACKGROUND_COLOR }};
-
+	FadeIn = {{ FADE_IN }};
+	FadeOut = {{ FADE_OUT }};
 	{{ LAYER_INIT }}
 
 	auto& factory = ObjectFactory::Instance();
@@ -30,13 +31,12 @@ void GeneratedFrame{{ FRAME_INDEX }}::Initialize() {
 
 void GeneratedFrame{{ FRAME_INDEX }}::Update() {
 	Frame::Update();
-
 	//Timer events
+		
 	{{ EVENT_TIMER_UPDATE_LOOP }}
 
 	//Normal events
 	{{ EVENT_UPDATE_LOOP }}
-
 	Frame::DeleteMarkedInstances();
 }
 

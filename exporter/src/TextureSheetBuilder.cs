@@ -134,7 +134,6 @@ public class TextureSheetBuilder
             remainingStart += packedCount;
             atlasIndex++;
         }
-
         return textureSheets;
     }
 }

@@ -13,7 +13,8 @@ public static class ExtensionExporterRegistry
 	{
 		new ButtonObjectExporter(),
 		new IniExporter(),
-		new PerspectiveExporter()
+		new PerspectiveExporter(),
+		new ArrayExtension()
 	};
 
 	public static ExtensionExporter GetExporter(string extensionName)

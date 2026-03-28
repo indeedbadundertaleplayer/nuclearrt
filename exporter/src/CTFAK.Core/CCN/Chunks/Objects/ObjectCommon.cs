@@ -1,3 +1,4 @@
+using CTFAK.CCN.Chunks.Frame;
 using CTFAK.Core.CCN.Chunks.Objects;
 using CTFAK.Memory;
 using CTFAK.Utils;
@@ -107,6 +108,8 @@ namespace CTFAK.CCN.Chunks.Objects
 		public AlterableStrings Strings;
 		public Movements Movements;
 		public Text Text;
+		public Transition transition;
+		public Transition transition2;
 		public Counter Counter;
 		public short[] _qualifiers = new short[8];
 		public static int what = 0;
@@ -169,7 +172,28 @@ namespace CTFAK.CCN.Chunks.Objects
 				Strings = new AlterableStrings();
 				Strings.Read(reader);
 			}
-
+			if (_fadeinOffset > 0)
+			{
+				reader.Seek(currentPosition + _fadeinOffset);
+				transition = new Transition();
+				transition.Read(reader);
+			}
+			else
+			{
+				transition = new Transition();
+				transition.Name = "None";
+			}
+			if (_fadeoutOffset > 0)
+			{
+				reader.Seek(currentPosition + _fadeoutOffset);
+				transition2 = new Transition();
+				transition2.Read(reader);
+			}
+			else
+			{
+				transition2 = new Transition();
+				transition2.Name = "None";
+			}
 			if (_movementsOffset > 0)
 			{
 				if (Settings.Old)

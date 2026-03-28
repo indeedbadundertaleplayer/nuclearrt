@@ -9,6 +9,7 @@
 #include "Layer.h"
 #include "CounterBase.h"
 #include "ShaderFactory.h"
+#include "Transition.h"
 class Frame {
 public:
 	Frame() = default;
@@ -22,6 +23,9 @@ public:
 
 	int BackgroundColor = 0;
 	std::unique_ptr<Shader> frameShader = std::make_unique<None>();
+	std::unique_ptr<Transition> FadeIn;
+	std::unique_ptr<Transition> FadeOut;
+	void HandleFadeOut(int frameIndex) const;
 	void SetShader(const std::string& newShader) {
 		auto it = shaderFactory.find(newShader);
 		if (it == shaderFactory.end()) return;
@@ -29,11 +33,11 @@ public:
 		std::cout << "Shader Code Size : " << frameShader->codeSize << "\n";
 		Application::Instance().GetBackend()->CreateShader(newShader, frameShader->numSamplers, frameShader->numUniformBuffers, frameShader->code, frameShader->codeSize);
 	}
-	void SetShaderParam(std::string name, float value) {
+	void SetShaderParam(std::string name, float value) const {
 		frameShader->SetParameter(name, value);
 		Application::Instance().GetBackend()->SetFragmentUniforms(name, 0, frameShader->GetData(), sizeof(frameShader->GetData()));
 	}
-	float GetShaderParam(std::string name) {return frameShader->GetParameter(name);}
+	float GetShaderParam(std::string name) const {return frameShader->GetParameter(name);}
 	std::vector<Layer> Layers;
 
 	std::unordered_map<unsigned int, ObjectInstance*> ObjectInstances;
@@ -67,7 +71,10 @@ public:
 	//mark an instance for deletion
 	void MarkForDeletion(ObjectInstance* instance) {
 		if (instance) {
-			instancesMarkedForDeletion.push_back(instance->Handle);
+			if (strcmp(((Active*)instance)->FadeOut->Name, "None") != 0) {
+				if (!((Active*)instance)->FadeOut->hasTransitioned) ((Active*)instance)->FadeOut->isProcessing = true;	
+			}
+			else instancesMarkedForDeletion.push_back(instance->Handle);
 		}
 	}
 

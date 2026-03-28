@@ -80,6 +80,8 @@ elseif(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)
     add_compile_definitions(PLATFORM_LINUX)
 elseif(EMSCRIPTEN)
     add_compile_definitions(PLATFORM_WEB)
+elseif(ANDROID)
+    add_compile_definitions(PLATFORM_ANDROID)
 endif()
 
 # Configure debug mode

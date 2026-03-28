@@ -75,13 +75,14 @@ public class FrameExporter : BaseExporter
 		frameCpp = frameCpp.Replace("{{ OBJECT_INSTANCES }}", BuildObjectInstances(frame));
 		frameCpp = frameCpp.Replace("{{ OBJECT_SELECTORS_INIT }}", BuildObjectSelectorsInit(frame));
 		frameCpp = frameCpp.Replace("{{ GROUP_ACTIVE }}", BuildGroupActive(frameIndex));
-
+		
 		_eventProcessor.PreProcessFrame(frameIndex);
 
 		frameCpp = frameCpp.Replace("{{ EVENT_TIMER_UPDATE_LOOP }}", _eventProcessor.BuildEventUpdateLoop(frameIndex, true));
 		frameCpp = frameCpp.Replace("{{ EVENT_UPDATE_LOOP }}", _eventProcessor.BuildEventUpdateLoop(frameIndex, false));
 		frameCpp = frameCpp.Replace("{{ EVENT_FUNCTIONS }}", _eventProcessor.BuildEventFunctions(frameIndex));
-
+		frameCpp = frameCpp.Replace("{{ FADE_IN }}", $"std::make_unique<Transition>(\"{frame.fadeIn.Name}\", {frame.fadeIn.Duration}, {frame.fadeIn.Color.ToArgb()}, {frame.fadeIn.Flags})");
+		frameCpp = frameCpp.Replace("{{ FADE_OUT }}", $"std::make_unique<Transition>(\"{frame.fadeOut.Name}\", {frame.fadeOut.Duration}, {frame.fadeOut.Color.ToArgb()}, {frame.fadeOut.Flags})");
 		return frameCpp;
 	}
 

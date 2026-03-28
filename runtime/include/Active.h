@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ObjectInstance.h"
+#include "Transition.h"
 #include <vector>
 #include <memory>
 
@@ -24,7 +25,8 @@ public:
 	bool FollowFrame = false;
 	bool AutomaticRotation = false;
 	bool FineDetection = false;
-
+	std::unique_ptr<Transition> FadeIn;
+	std::unique_ptr<Transition> FadeOut;
 	std::vector<unsigned int> GetImagesUsed() override {
 		return animations.GetImagesUsed();
 	}

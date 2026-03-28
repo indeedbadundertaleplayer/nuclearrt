@@ -3,14 +3,13 @@
 #include <map>
 #include <algorithm>
 #include <math.h>
-
+#include <cstring>
 #include "Application.h"
 #include "Counter.h"
 #include "Extension.h"
 #include "FontBank.h"
 #include "ImageBank.h"
 #include "ObjectGlobalDataCounter.h"
-
 constexpr float PI = 3.14159265358979323846f;
 
 void Frame::Initialize()
@@ -25,22 +24,52 @@ void Frame::Update()
 {
 	float deltaTime = Application::Instance().GetBackend()->GetTimeDelta();
 	GameTimer.Update(deltaTime);
-
-	for (auto& [handle, instance] : ObjectInstances)
-	{
-		//Animation update
-		if (instance->Type == 2) // Common object with possible animation
+	if (FadeIn->isProcessing) FadeIn->Update(deltaTime);
+	if (FadeIn->hasTransitioned && !FadeOut->isProcessing) {
+		for (auto& [handle, instance] : ObjectInstances)
 		{
-			((Active*)instance)->movements.Update(deltaTime);
-			((Active*)instance)->animations.Update(deltaTime);
-		}
-		else if (instance->Type == 5 || instance->Type == 6 || instance->Type == 7) // Counter
-		{
-			((CounterBase*)instance)->movements.Update(deltaTime);
-		}
-		else if (instance->Type >= 32) // Extension
-		{
-			((Extension*)instance)->Update(deltaTime);
+			//Animation update
+			if (instance->Type == 2) // Common object with possible animation
+			{
+				if (!((Active*)instance)->FadeIn->isProcessing) {
+					if (!((Active*)instance)->FadeOut->isProcessing) {
+						if (!((Active*)instance)->FadeIn->hasTransitioned) ((Active*)instance)->FadeIn->isProcessing = true;
+						((Active*)instance)->movements.Update(deltaTime);
+						((Active*)instance)->animations.Update(deltaTime);
+					}
+					else {
+						((Active*)instance)->FadeOut->Update(deltaTime);
+						if (std::strcmp(((Active*)instance)->FadeOut->Name, "None") != 0) {
+							if (std::strcmp(((Active*)instance)->FadeOut->Name, "FADE") == 0) {
+								float alpha = 1.0f - ((Active*)instance)->FadeOut->Elapsed / (((Active*)instance)->FadeOut->Duration / 1000.0f);
+								alpha = std::clamp(alpha, 0.0f, 1.0f);
+								((Active*)instance)->SetEffectParameter(255 * (1.0f - alpha));
+							}
+						}
+						else ((Active*)instance)->FadeOut->Elapsed = 1.0f;
+					}
+				}
+				else {
+					((Active*)instance)->FadeIn->Update(deltaTime);
+					if (std::strcmp(((Active*)instance)->FadeIn->Name, "None") != 0) {
+						if (std::strcmp(((Active*)instance)->FadeIn->Name, "FADE") == 0) {
+							float alpha = 1.0f - ((Active*)instance)->FadeIn->Elapsed / (((Active*)instance)->FadeIn->Duration / 1000.0f);
+							alpha = std::clamp(alpha, 0.0f, 1.0f);
+							((Active*)instance)->SetEffectParameter(255 * alpha);
+						}
+					}
+					else ((Active*)instance)->FadeIn->Elapsed = 1.0f;
+				}
+				if (((Active*)instance)->FadeOut->hasTransitioned) MarkForDeletion(instance);
+			}
+			else if (instance->Type == 5 || instance->Type == 6 || instance->Type == 7) // Counter
+			{
+				((CounterBase*)instance)->movements.Update(deltaTime);
+			}
+			else if (instance->Type >= 32) // Extension
+			{
+				((Extension*)instance)->Update(deltaTime);
+			}
 		}
 	}
 }
@@ -48,14 +77,40 @@ void Frame::Update()
 void Frame::Draw()
 {
 	Application::Instance().GetBackend()->Clear(BackgroundColor);
-	Application::Instance().GetBackend()->BeginShaderDraw(frameShader->Name);
 	for (unsigned int i = 0; i < Layers.size(); i++)
 	{
-		DrawLayer(Layers[i]);
+		if (!FadeIn->isProcessing) DrawLayer(Layers[i]);
 	}
-	Application::Instance().GetBackend()->EndShaderDraw();
+	if (FadeIn->isProcessing) {
+		if (std::strcmp(FadeIn->Name, "FADE") == 0) {
+			float alpha;
+			if (FadeIn->Elapsed != 0.0f) alpha = FadeIn->Elapsed / (FadeIn->Duration / 1000.0f);
+			else alpha = 0.0f;
+			alpha = std::clamp(alpha, 0.0f, 1.0f);
+			Application::Instance().GetBackend()->DrawFrameTexture(FadeIn.get(), alpha);
+		}
+		else {
+			std::cout << "Unknown transition : " << FadeIn->Name << "\n";
+			FadeIn->isProcessing = false;
+			FadeIn->hasTransitioned = true;
+		}
+	}
 }
-
+void Frame::HandleFadeOut(int frameIndex) const
+{
+	if (FadeOut->isProcessing) {
+		FadeOut->Update(Application::Instance().GetBackend()->GetTimeDelta());
+		if (std::strcmp(FadeOut->Name, "FADE") == 0) {
+			float alpha;
+			if (FadeOut->Elapsed != 0.0f) alpha = 1.0f - (FadeOut->Elapsed / (FadeOut->Duration / 1000.0f));
+			else alpha = 0.0f;
+			alpha = std::clamp(alpha, 0.0f, 1.0f);
+			Application::Instance().GetBackend()->BeginDrawing();
+			Application::Instance().GetBackend()->DrawFrameTexture(FadeOut.get(), alpha);
+			Application::Instance().GetBackend()->EndDrawing();
+		}
+	}
+}
 void Frame::SetScroll(int x, int y, int layer)
 {
 	int windowWidth = Application::Instance().GetAppData()->GetWindowWidth();
@@ -99,147 +154,152 @@ void Frame::SetScrollY(int y)
 
 void Frame::DrawLayer(Layer& layer)
 {
-	Application::Instance().GetBackend()->BeginShaderDraw(layer.layerShader->Name);
-	for (auto& instance : layer.instances)
-	{
-		if (instance->Type == 1)
+	//Application::Instance().GetBackend()->BeginShaderDraw(layer.layerShader->Name); // Figure out Layer Shader later.
+	if (Application::Instance().GetBackend()->WindowShown()) {
+		for (auto& instance : layer.instances)
 		{
-			auto& imageBank = ImageBank::Instance();
-			unsigned int imageId = ((Backdrop*)instance)->Image;
-			auto imageInfo = imageBank.GetImage(imageId);
-			if (instance->shader->hasPixelSize) {
-				instance->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(imageInfo->Width);
-				instance->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(imageInfo->Height);
-				Application::Instance().GetBackend()->SetFragmentUniforms(instance->shader->Name, 1, &instance->shader->pixelSize, sizeof(instance->shader->pixelSize));
-			}
-			Application::Instance().GetBackend()->BeginShaderDraw(instance->shader->Name);
-			Application::Instance().GetBackend()->DrawTexture(
-				imageId, instance->X - (scrollX * layer.XCoefficient), instance->Y - (scrollY * layer.YCoefficient),
-				0, 0, 0, instance->scaleX, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter(), instance->scaleY);
-			Application::Instance().GetBackend()->EndShaderDraw();
-		}
-		else if (instance->Type == 2)
-		{
-			if (!((Active*)instance)->Visible) continue;
-
-			auto& imageBank = ImageBank::Instance();
-			auto& animations = ((Active*)instance)->animations;
-			unsigned int imageId = animations.GetCurrentImageHandle();
-
-			int scrollXOffset = 0;
-			int scrollYOffset = 0;
-			if (((Active*)instance)->FollowFrame)
+			if (instance->Type == 1)
 			{
-				scrollXOffset = scrollX * layer.XCoefficient;
-				scrollYOffset = scrollY * layer.YCoefficient;
-			}
-
-			auto imageInfo = imageBank.GetImage(imageId);
-			if (imageInfo)
-			{
+				auto& imageBank = ImageBank::Instance();
+				unsigned int imageId = ((Backdrop*)instance)->Image;
+				auto imageInfo = imageBank.GetImage(imageId);
 				if (instance->shader->hasPixelSize) {
 					instance->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(imageInfo->Width);
 					instance->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(imageInfo->Height);
 					Application::Instance().GetBackend()->SetFragmentUniforms(instance->shader->Name, 1, &instance->shader->pixelSize, sizeof(instance->shader->pixelSize));
 				}
-				int angle = ((Active*)instance)->GetAngle();
-				if (((Active*)instance)->AutomaticRotation)
+				Application::Instance().GetBackend()->BeginShaderDraw(instance->shader->Name);
+				Application::Instance().GetBackend()->DrawTexture(
+					imageId, instance->X - (scrollX * layer.XCoefficient), instance->Y - (scrollY * layer.YCoefficient),
+					0, 0, 0, instance->scaleX, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter(), instance->scaleY);
+				Application::Instance().GetBackend()->EndShaderDraw();
+			}
+			else if (instance->Type == 2)
+			{
+				if (!((Active*)instance)->Visible) continue;
+
+				auto& imageBank = ImageBank::Instance();
+				auto& animations = ((Active*)instance)->animations;
+				unsigned int imageId = animations.GetCurrentImageHandle();
+
+				int scrollXOffset = 0;
+				int scrollYOffset = 0;
+				if (((Active*)instance)->FollowFrame)
 				{
-					auto movement = ((Active*)instance)->movements.GetCurrentMovement();
-					if (movement != nullptr && !animations.IsDirectionForced())
+					scrollXOffset = scrollX * layer.XCoefficient;
+					scrollYOffset = scrollY * layer.YCoefficient;
+				}
+
+				auto imageInfo = imageBank.GetImage(imageId);
+				if (imageInfo)
+				{
+					if (instance->shader->hasPixelSize) {
+						instance->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(imageInfo->Width);
+						instance->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(imageInfo->Height);
+						Application::Instance().GetBackend()->SetFragmentUniforms(instance->shader->Name, 1, &instance->shader->pixelSize, sizeof(instance->shader->pixelSize));
+					}
+					int angle = ((Active*)instance)->GetAngle();
+					if (((Active*)instance)->AutomaticRotation)
 					{
-						angle += movement->GetMovementDirection() * 180 / 16;
+						auto movement = ((Active*)instance)->movements.GetCurrentMovement();
+						if (movement != nullptr && !animations.IsDirectionForced())
+						{
+							angle += movement->GetMovementDirection() * 180 / 16;
+						}
+						else
+						{
+							angle += animations.GetAutomaticRotationDirection() * 180 / 16;
+						}
+					}
+					Application::Instance().GetBackend()->BeginShaderDraw(instance->shader->Name);
+					Application::Instance().GetBackend()->DrawTexture(
+						imageId, instance->X - scrollXOffset, instance->Y - scrollYOffset,
+						imageInfo->HotspotX, imageInfo->HotspotY,
+						angle, instance->scaleX, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter(), instance->scaleY);
+					Application::Instance().GetBackend()->EndShaderDraw();
+				}
+			}
+			else if (instance->Type == 3) // Text
+			{
+				if (!((StringObject*)instance)->Visible) continue;
+
+				int scrollXOffset = 0;
+				int scrollYOffset = 0;
+
+				if (((StringObject*)instance)->FollowFrame)
+				{
+					scrollXOffset = scrollX * layer.XCoefficient;
+					scrollYOffset = scrollY * layer.YCoefficient;
+				}
+
+				std::string text = ((StringObject*)instance)->GetText();
+				if (instance->shader->hasPixelSize) {
+					instance->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(((StringObject*)instance)->Width);
+					instance->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(((StringObject*)instance)->Height);
+					Application::Instance().GetBackend()->SetFragmentUniforms(instance->shader->Name, 1, &instance->shader->pixelSize, sizeof(instance->shader->pixelSize));
+				}
+				Application::Instance().GetBackend()->BeginShaderDraw(instance->shader->Name);
+				Application::Instance().GetBackend()->DrawText(FontBank::Instance().GetFont(((StringObject*)instance)->GetFont()), instance->X - scrollXOffset, instance->Y - scrollYOffset, ((StringObject*)instance)->GetColor(), text, instance->Handle);
+				Application::Instance().GetBackend()->EndShaderDraw();
+			}
+			else if (instance->Type == 5 || instance->Type == 6 || instance->Type == 7) // Score, Lives, Counter
+			{
+				CounterBase* counter = (CounterBase*)instance;
+				if (!counter->Visible) continue;
+
+				int scrollXOffset = 0;
+				int scrollYOffset = 0;
+				if (counter->FollowFrame)
+				{
+					scrollXOffset = scrollX * layer.XCoefficient;
+					scrollYOffset = scrollY * layer.YCoefficient;
+				}
+
+				//TODO: Add support for other display types
+				if (counter->DisplayType == 1) // Numbers
+				{
+					auto appdata = Application::Instance().GetAppData();
+
+					int value = 0;
+					if (instance->Type == 5) // Score
+					{
+						value = Application::Instance().GetAppData()->GetPlayerScores()[counter->Player];
+					}
+					else if (instance->Type == 6) // Lives
+					{
+						value = Application::Instance().GetAppData()->GetPlayerLives()[counter->Player];
 					}
 					else
 					{
-						angle += animations.GetAutomaticRotationDirection() * 180 / 16;
+						value = ((Counter*)instance)->GetValue();
 					}
+
+					DrawCounterNumbers(counter, value, instance->X - scrollXOffset, instance->Y - scrollYOffset);
+				}
+			}
+			else if (instance->Type == 0) // Quick backdrop
+			{
+				int scrollXOffset = scrollX * layer.XCoefficient;
+				int scrollYOffset = scrollY * layer.YCoefficient;
+				if (instance->shader->hasPixelSize) {
+					instance->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(((QuickBackdrop*)instance)->Width);
+					instance->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(((QuickBackdrop*)instance)->Width);
+					Application::Instance().GetBackend()->SetFragmentUniforms(instance->shader->Name, 1, &instance->shader->pixelSize, sizeof(instance->shader->pixelSize));
 				}
 				Application::Instance().GetBackend()->BeginShaderDraw(instance->shader->Name);
-				Application::Instance().GetBackend()->DrawTexture(
-					imageId, instance->X - scrollXOffset, instance->Y - scrollYOffset,
-					imageInfo->HotspotX, imageInfo->HotspotY, 
-					angle, instance->scaleX, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter(), instance->scaleY);
+				Application::Instance().GetBackend()->DrawQuickBackdrop(instance->X - scrollXOffset, instance->Y - scrollYOffset, ((QuickBackdrop*)instance)->Width, ((QuickBackdrop*)instance)->Height, &((QuickBackdrop*)instance)->shape);
 				Application::Instance().GetBackend()->EndShaderDraw();
 			}
-		}
-		else if (instance->Type == 3) // Text
-		{
-			if (!((StringObject*)instance)->Visible) continue;
-
-			int scrollXOffset = 0;
-			int scrollYOffset = 0;
-
-			if (((StringObject*)instance)->FollowFrame)
+			else if (instance->Type >= 32) // Extension
 			{
-				scrollXOffset = scrollX * layer.XCoefficient;
-				scrollYOffset = scrollY * layer.YCoefficient;
-			}
-
-			std::string text = ((StringObject*)instance)->GetText();
-			if (instance->shader->hasPixelSize) {
-				instance->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(((StringObject*)instance)->Width);
-				instance->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(((StringObject*)instance)->Height);
-				Application::Instance().GetBackend()->SetFragmentUniforms(instance->shader->Name, 1, &instance->shader->pixelSize, sizeof(instance->shader->pixelSize));
-			}
-			Application::Instance().GetBackend()->BeginShaderDraw(instance->shader->Name);
-			Application::Instance().GetBackend()->DrawText(FontBank::Instance().GetFont(((StringObject*)instance)->GetFont()), instance->X - scrollXOffset, instance->Y - scrollYOffset, ((StringObject*)instance)->GetColor(), text, instance->Handle);
-			Application::Instance().GetBackend()->EndShaderDraw();
-		}
-		else if (instance->Type == 5 || instance->Type == 6 || instance->Type == 7) // Score, Lives, Counter
-		{
-			CounterBase* counter = (CounterBase*)instance;
-			if (!counter->Visible) continue;
-			
-			int scrollXOffset = 0;
-			int scrollYOffset = 0;
-			if (counter->FollowFrame)
-			{
-				scrollXOffset = scrollX * layer.XCoefficient;
-				scrollYOffset = scrollY * layer.YCoefficient;
-			}
-
-			//TODO: Add support for other display types
-			if (counter->DisplayType == 1) // Numbers
-			{
-				auto appdata = Application::Instance().GetAppData();
-
-				int value = 0;
-				if (instance->Type == 5) // Score
-				{
-					value = Application::Instance().GetAppData()->GetPlayerScores()[counter->Player];
-				}
-				else if (instance->Type == 6) // Lives
-				{
-					value = Application::Instance().GetAppData()->GetPlayerLives()[counter->Player];
-				}
-				else
-				{
-					value = ((Counter*)instance)->GetValue();
-				}
-				
-				DrawCounterNumbers(counter, value, instance->X - scrollXOffset, instance->Y - scrollYOffset);
+				((Extension*)instance)->Draw();
 			}
 		}
-		else if (instance->Type == 0) // Quick backdrop
-		{
-			int scrollXOffset = scrollX * layer.XCoefficient;
-			int scrollYOffset = scrollY * layer.YCoefficient;
-			if (instance->shader->hasPixelSize) {
-				instance->shader->pixelSize.fPixelWidth = 1.0f / static_cast<float>(((QuickBackdrop*)instance)->Width);
-				instance->shader->pixelSize.fPixelHeight = 1.0f / static_cast<float>(((QuickBackdrop*)instance)->Width);
-				Application::Instance().GetBackend()->SetFragmentUniforms(instance->shader->Name, 1, &instance->shader->pixelSize, sizeof(instance->shader->pixelSize));
-			}
-			Application::Instance().GetBackend()->BeginShaderDraw(instance->shader->Name);
-			Application::Instance().GetBackend()->DrawQuickBackdrop(instance->X - scrollXOffset, instance->Y - scrollYOffset, ((QuickBackdrop*)instance)->Width, ((QuickBackdrop*)instance)->Height, &((QuickBackdrop*)instance)->shape);
-			Application::Instance().GetBackend()->EndShaderDraw();
-		}
-		else if (instance->Type >= 32) // Extension
-		{
-			((Extension*)instance)->Draw();
+		if (std::strcmp(FadeIn->Name, "None") != 0 && !FadeIn->hasTransitioned) {
+			Application::Instance().GetBackend()->GetFrameTexture(); // Assuming everything has been drawn, we can now get the texture of the frame
 		}
 	}
-	Application::Instance().GetBackend()->EndShaderDraw();
+	//Application::Instance().GetBackend()->EndShaderDraw();
 }
 
 void Frame::DrawCounterNumbers(CounterBase *counter, int value, int x, int y)

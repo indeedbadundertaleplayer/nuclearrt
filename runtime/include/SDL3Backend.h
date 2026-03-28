@@ -50,7 +50,7 @@ public:
 
 	void Initialize() override;
 	void Deinitialize() override;
-
+	bool WindowShown() override { return renderedFirstFrame; }
 	bool ShouldQuit() override;
 
 	std::string GetPlatformName() override;
@@ -63,8 +63,15 @@ public:
 	void LoadTexture(int id) override;
 	void UnloadTexture(int id) override;
 	void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scaleX, int color, int effect, unsigned char effectParameter, float scaleY) override;
+	void GetFrameTexture() override {
+		SDL_Surface* surface = SDL_RenderReadPixels(renderer, NULL);
+		frameTexture = SDL_CreateTextureFromSurface(renderer, surface);
+		SDL_DestroySurface(surface);
+		surface = nullptr;
+		SDL_SetTextureBlendMode(frameTexture, SDL_BLENDMODE_BLEND);
+	}
+	void DrawFrameTexture(Transition* transition, float alpha) override;
 	void DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape) override;
-	void DrawBGTexture(int x, int y, int width, int height, float scaleX, float scaleY) override;
 	void CreateShader(std::string name, int numSamplers, int numUniformBuffers, const unsigned char* code, int codeSize) override;
 	void ClearShaders() override;
 	void BeginShaderDraw(std::string name) override {
@@ -90,10 +97,7 @@ public:
 	}
 	bool SetFragmentUniforms(std::string name, uint32_t slotIndex, const void* data, uint32_t length) override {
 		auto it = shaders.find(name);
-		if (it == shaders.end()) {
-			std::cout << "Couldn't find shader\n";
-			return false;
-		}
+		if (it == shaders.end()) return false;
 		Shaders& shader = it->second;
 		if (slotIndex >= 2) return false;
 		if (shader.state) {
@@ -101,12 +105,8 @@ public:
 				std::cout << "SDL_SetGPURenderStateFragmentUniforms failed : " << SDL_GetError() << "\n";
 				return false;
 			}
-			else {
-				std::cout << "Uniforms Set\n";
-				return true;
-			}
+			else return true;
 		}
-		else std::cout << "Shader has no state\n";
 		return false;
 	}
 	void DrawRectangle(int x, int y, int width, int height, int color) override;
@@ -181,6 +181,7 @@ private:
 	SDL_Renderer* renderer;
 	SDL_GPUDevice* gpuDevice;
 	SDL_Texture* renderTarget;
+	SDL_Texture* frameTexture;
 	static SDL_AudioDeviceID audio_device;
 	SDL_AudioSpec spec;
 	bool renderedFirstFrame = false;
@@ -189,7 +190,6 @@ private:
 	SDL_FRect CalculateRenderTargetRect();
 	SDL_Color RGBToSDLColor(int color);
 	SDL_Color RGBAToSDLColor(int color);
-
 	std::unordered_map<int, SDL_Texture*> mosaics;
 	std::unordered_map<int, int> imageToMosaic;
 	std::unordered_map<int, std::set<int>> mosaicToImages;
@@ -200,7 +200,6 @@ private:
 	bool windowFocused = true;
 	std::unordered_map<int, TTF_Font*> fonts;
 	std::unordered_map<std::string, std::shared_ptr<std::vector<uint8_t>>> fontBuffers;
-	SDL_Texture* backgroundTexture;
 	struct TextCacheKey {
 		unsigned int fontHandle;
 		std::string text;

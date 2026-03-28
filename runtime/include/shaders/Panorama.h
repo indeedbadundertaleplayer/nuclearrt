@@ -1,16 +1,13 @@
 #pragma once
 #include "Shader.h"
-#include "compiled/RPanorama.frag.dxil.h" // DirectX 12 (Windows, Xbox)
-#include "compiled/RPanorama.frag.msl.h" // Metal (Apple Devices)
-#include "compiled/RPanorama.frag.spv.h" // Vulkan (Windows, Linux, Android, Nintendo Switch)
+#include "compiled/RPanorama.frag.dxil.h"
+#include "compiled/RPanorama.frag.msl.h"
+#include "compiled/RPanorama.frag.spv.h"
 #include "Application.h"
 struct ContextPanorama {
-    float pixelWidth;
-    float pixelHeight;
     int zoom = 300;
     int pDir = 0;
     int noWrap = 1;
-    int _pad;
 };
 class Panorama : public Shader {
 public:

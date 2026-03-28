@@ -45,7 +45,7 @@ public:
 
 	void Initialize() override;
 	void Deinitialize() override;
-
+	bool WindowShown() override { return false; }
 	bool ShouldQuit() override;
 
 	std::string GetPlatformName() override;
@@ -58,13 +58,14 @@ public:
 	void LoadTexture(int id) override;
 	void UnloadTexture(int id) override;
 	void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scaleX, int color, int effect, unsigned char effectParameter, float scaleY) override;
+	void GetFrameTexture() override {}
+	void DrawFrameTexture(Transition* transition, float alpha) override {}
 	void DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape) override;
 	void CreateShader(std::string name, int numSamplers, int numUniformBuffers, const unsigned char* code, int codeSize) override {}
 	void ClearShaders() override {}
 	void BeginShaderDraw(std::string name) override {}
 	void EndShaderDraw() override {}
 	bool SetFragmentUniforms(std::string name, uint32_t slotIndex, const void *data, uint32_t length) override {return false;}
-	void DrawBGTexture(int x, int y, int width, int height, float scaleX, float scaleY) override {}
 	void DrawRectangle(int x, int y, int width, int height, int color) override;
 	void DrawRectangleLines(int x, int y, int width, int height, int color) override;
 	void DrawLine(int x1, int y1, int x2, int y2, int color) override;

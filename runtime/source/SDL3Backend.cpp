@@ -3,6 +3,7 @@
 #include "SDL3Backend.h"
 
 #include <iostream>
+#include <cstring>
 #include <math.h>
 #include "Application.h"
 #include "Frame.h"
@@ -29,7 +30,7 @@ SDL3Backend::SDL3Backend() {
 }
 
 SDL3Backend::~SDL3Backend() {
-	Deinitialize();
+	// Deinitialize(); Check Application.cpp Line 76
 }
 void SDLCALL SDL3Backend::AudioCallback(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount)
 {
@@ -104,7 +105,7 @@ void SDL3Backend::Initialize() {
 	SDL_GPUShaderFormat shaderFormats = SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL;
 	gpuDevice = SDL_CreateGPUDevice(shaderFormats, false, nullptr);
 	if (gpuDevice == nullptr) {
-		std::cerr << "SDL_CreateGPUDevice Error: " << SDL_GetError() << std::endl;
+		SDL_Log("SDL_CreateGPUDevice Error: %s", SDL_GetError());
 		return;
 	}
 
@@ -113,20 +114,14 @@ void SDL3Backend::Initialize() {
 		std::cerr << "SDL_CreateGPURenderer Error: " << SDL_GetError() << std::endl;
 		return;
 	}
-
+	std::cout << "Created GPU Renderer\n";
 	// Create the render target texture
 	renderTarget = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_TARGET, windowWidth, windowHeight);
 	if (renderTarget == nullptr) {
 		std::cerr << "SDL_CreateTexture Error: " << SDL_GetError() << std::endl;
 		return;
 	}
-	SDL_Surface* whiteSurf = SDL_CreateSurface(Application::Instance().GetAppData()->GetWindowWidth(), Application::Instance().GetAppData()->GetWindowHeight(), SDL_PIXELFORMAT_RGBA8888);
-	const SDL_PixelFormatDetails* details = SDL_GetPixelFormatDetails(whiteSurf->format);
-	Uint32 white = SDL_MapRGBA(details, NULL, 255, 255, 255, 255);
-	SDL_FillSurfaceRect(whiteSurf, NULL, white);
-	backgroundTexture = SDL_CreateTextureFromSurface(renderer, whiteSurf);
-	SDL_DestroySurface(whiteSurf);
-	whiteSurf = nullptr;
+
 	//load assets
 	if (!pakFile.Load(GetAssetsFileName())) {
 		std::cerr << "PakFile::Load Error: " << "Failed to load assets file" << std::endl;
@@ -216,7 +211,10 @@ void SDL3Backend::Deinitialize()
 #ifdef _DEBUG
 	DEBUG_UI.Shutdown();
 #endif
-
+	if (frameTexture) {
+		SDL_DestroyTexture(frameTexture);
+		frameTexture = nullptr;
+	}
 	// cleanup mosaics
 	for (auto& pair : mosaics) {
 		SDL_DestroyTexture(pair.second);
@@ -264,10 +262,6 @@ void SDL3Backend::Deinitialize()
 	SDL_CloseAudioDevice(audio_device);
 	std::cout << "Cleared Audio.\n";
 	ClearShaders();
-	if (backgroundTexture) { 
-		SDL_DestroyTexture(backgroundTexture);
-		backgroundTexture = nullptr;
-	}
 	if (renderTarget != nullptr) {
 		SDL_DestroyTexture(renderTarget);
 		renderTarget = nullptr;
@@ -323,6 +317,8 @@ std::string SDL3Backend::GetPlatformName()
 	return "macOS";
 #elif defined(PLATFORM_LINUX)
 	return "Linux";
+#elif defined(PLATFORM_ANDROID)
+	return "Android";
 #else
 	return "Unknown";
 #endif
@@ -330,8 +326,11 @@ std::string SDL3Backend::GetPlatformName()
 
 std::string SDL3Backend::GetAssetsFileName()
 {
-	const char* basePath = SDL_GetBasePath();
-	return std::string(basePath) + "assets.pak";
+	if (strncmp(GetPlatformName().c_str(), "Android", GetPlatformName().size()) == 0) return "assets.pak";
+	else {
+		const char* basePath = SDL_GetBasePath();
+		return std::string(basePath) + "assets.pak";
+	}
 }
 
 void SDL3Backend::BeginDrawing()
@@ -417,7 +416,6 @@ void SDL3Backend::LoadTexture(int id) {
 		std::cerr << "LoadTexture Error: " << "Image with id " << id << " has invalid mosaic index" << std::endl;
 		return;
 	}
-
 	if (mosaics.find(mosaicIndex) == mosaics.end()) {
 		char mosaicFileName[32];
 		std::snprintf(mosaicFileName, sizeof(mosaicFileName), "images/m%05d.png", mosaicIndex);
@@ -427,14 +425,12 @@ void SDL3Backend::LoadTexture(int id) {
 			std::cerr << "PakFile::GetData Error: " << "Mosaic " << mosaicFileName << " not found" << std::endl;
 			return;
 		}
-
 		SDL_IOStream* stream = SDL_IOFromMem(data.data(), data.size());
 		SDL_Surface* loaded = SDL_LoadPNG_IO(stream, true); // Use SDL 3.4.0's new PNG loader
 		if (!loaded) {
 			std::cout << "SDL_LoadPNG_IO Error : " << SDL_GetError() << "\n";
 			return;
 		}
-
 		SDL_Surface* mosaicSurface = SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA8888);
 		if (!mosaicSurface) {
 			std::cout << "SDL_ConvertSurface Error : " << SDL_GetError() << "\n";
@@ -445,7 +441,6 @@ void SDL3Backend::LoadTexture(int id) {
 
 		SDL_DestroySurface(loaded);
 		loaded = nullptr;
-
 		SDL_Texture* mosaicTexture = SDL_CreateTextureFromSurface(renderer, mosaicSurface);
 		if (mosaicTexture == nullptr) {
 			std::cerr << "SDL_CreateTextureFromSurface Error: " << SDL_GetError() << std::endl;
@@ -453,6 +448,7 @@ void SDL3Backend::LoadTexture(int id) {
 			mosaicSurface = nullptr;
 			return;
 		}
+		mosaics[mosaicIndex] = mosaicTexture;
 		// BUILD COLLISION MASK
 		CollisionMask mask;
 		mask.width = imageInfo->Width;
@@ -474,7 +470,6 @@ void SDL3Backend::LoadTexture(int id) {
 		SDL_DestroySurface(mosaicSurface);
 		mosaicSurface = nullptr;
 		imageInfo->collisionMask = mask;
-		mosaics[mosaicIndex] = mosaicTexture;
 	}
 
 	imageToMosaic[id] = mosaicIndex;
@@ -528,20 +523,17 @@ void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, in
 		static_cast<float>(imageInfo->Width),
 		static_cast<float>(imageInfo->Height)
 	};
-
 	// Save original texture properties
 	Uint8 origR, origG, origB, origA;
 	SDL_BlendMode origBlendMode;
 	SDL_GetTextureColorMod(texture, &origR, &origG, &origB);
 	SDL_GetTextureAlphaMod(texture, &origA);
 	SDL_GetTextureBlendMode(texture, &origBlendMode);
-
 	// Apply new color
 	Uint8 r = (color >> 16) & 0xFF;
 	Uint8 g = (color >> 8) & 0xFF;
 	Uint8 b = color & 0xFF;
 	SDL_SetTextureColorMod(texture, r, g, b);
-
 	//get texture dimensions
 	int width = imageInfo->Width;
 	int height = imageInfo->Height;
@@ -570,9 +562,29 @@ void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, in
 	SDL_SetTextureColorMod(texture, origR, origG, origB);
 	SDL_SetTextureAlphaMod(texture, origA);
 	SDL_SetTextureBlendMode(texture, origBlendMode);
+
 }
 
-void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape)
+void SDL3Backend::DrawFrameTexture(Transition* transition, float alpha)
+{
+	SDL_Color color{};
+	if (transition->Color != 0) color = RGBToSDLColor(transition->Color);
+	SDL_FColor floatColor = {
+		static_cast<float>(color.r) / 255.0f, static_cast<float>(color.g) / 255.0f, static_cast<float>(color.b) / 255.0f, alpha
+	};
+	if (std::strcmp(transition->Name, "FADE") == 0) {
+		if (transition->Color == 0) SDL_SetTextureAlphaModFloat(frameTexture, alpha);
+		SDL_RenderTexture(renderer, frameTexture, NULL, NULL);
+		if (transition->Color != 0) {
+			SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+			SDL_SetRenderDrawColorFloat(renderer, floatColor.r, floatColor.g, floatColor.b, 1.0f - alpha);
+			SDL_RenderFillRect(renderer, NULL);
+			SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+		}
+	}
+}
+
+void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape *shape)
 {
 	//TODO: Borders
 	//TODO: Ellipse masks
@@ -680,12 +692,6 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 	}
 }
 
-void SDL3Backend::DrawBGTexture(int x, int y, int width, int height, float scaleX, float scaleY)
-{
-	SDL_FRect dest = {x, y, static_cast<float>(width) * scaleX, static_cast<float>(height) * scaleY };
-	SDL_RenderTexture(renderer, backgroundTexture, NULL, &dest);
-}
-
 void SDL3Backend::DrawRectangle(int x, int y, int width, int height, int color)
 {
 	SDL_SetRenderDrawColor(renderer, (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, (color >> 24) & 0xFF);
@@ -759,8 +765,8 @@ void SDL3Backend::ClearShaders() {
 	for (auto& pair : shaders) {
 		Shaders& allShader = pair.second;
 		if (allShader.gpuShader) {
-			if (allShader.state) { 
-				SDL_DestroyGPURenderState(allShader.state); 
+			if (allShader.state) {
+				SDL_DestroyGPURenderState(allShader.state);
 				allShader.state = nullptr;
 			}
 			SDL_ReleaseGPUShader(gpuDevice, allShader.gpuShader);
@@ -1430,9 +1436,9 @@ void SDL3Backend::StopSample(int id, bool channel) {
 			channels[id].stream = nullptr;
 			if (channels[id].data) {
 				SDL_free(channels[id].data);
+				channels[id].data = nullptr;
+				channels[id].data_len = 0;
 			}
-			channels[id].data = nullptr;
-			channels[id].data_len = 0;
 		}
 		channels[id].curHandle = -1;
 		channels[id].uninterruptable = false;
@@ -1511,7 +1517,6 @@ SDL_FRect SDL3Backend::CalculateRenderTargetRect()
 		rect.x = static_cast<float>((currentWindowWidth - static_cast<int>(rect.w)) / 2);
 		rect.y = static_cast<float>((currentWindowHeight - static_cast<int>(rect.h)) / 2);
 	}
-
 	return rect;
 }
 

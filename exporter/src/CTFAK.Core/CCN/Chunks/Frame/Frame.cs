@@ -322,7 +322,16 @@ case 13132: // Unknown
 						break;
 				}
 			}
-
+			if (fadeIn == null)
+			{
+				fadeIn = new Transition();
+				fadeIn.Name = "None";
+			}
+			if (fadeOut == null)
+			{
+				fadeOut = new Transition();
+				fadeOut.Name = "None";
+			}
 			//Logger.Log($"Frame Found: {name}, {width}x{height}, {objects.Count} objects.", true, ConsoleColor.Green);
 		}
 	}

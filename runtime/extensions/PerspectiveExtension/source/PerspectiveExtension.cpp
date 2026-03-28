@@ -12,6 +12,6 @@ void PerspectiveExtension::Initialize() {
 }
 void PerspectiveExtension::Draw() {
     Application::Instance().GetBackend()->BeginShaderDraw(panorama.Name);
-    Application::Instance().GetBackend()->DrawBGTexture(X, Y, Width, Height, 1.0f, 1.0f);
+    // Figure out how to do this...
     Application::Instance().GetBackend()->EndShaderDraw();
 }

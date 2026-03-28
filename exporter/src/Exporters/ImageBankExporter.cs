@@ -18,7 +18,6 @@ public class ImageBankExporter : BaseExporter
 			int mosaicIndex = 0;
 			int mosaicX = 0;
 			int mosaicY = 0;
-			
 			if (TextureSheetBuilder.ImageAtlasMetadata.TryGetValue(image.Handle, out var metadata))
 			{
 				mosaicIndex = metadata.AtlasIndex;

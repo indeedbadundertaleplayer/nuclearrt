@@ -72,8 +72,8 @@ void Application::Draw()
 
 void Application::Shutdown()
 {
-	std::cout << "Shutting down..." << std::endl;
-	backend->Deinitialize();
+	std::cout << "Shutting down...\n";
+	backend->Deinitialize(); // Debating whether the backend destructor or the app shutdown should deinitialize... for now let App deinit backend.
 }
 
 static void Loop()
@@ -146,6 +146,17 @@ short Application::RandomRange(short min, short max)
 
 void Application::LoadFrame(int frameIndex)
 {
+	if (backend->WindowShown()) {
+		if (currentFrame->FadeOut) {
+			backend->GetFrameTexture();
+			while (!currentFrame->FadeOut->hasTransitioned) {
+				if (std::strcmp(currentFrame->FadeOut->Name, "NONE") != 0) {
+					currentFrame->FadeOut->isProcessing = true;
+					currentFrame->HandleFadeOut(frameIndex);
+				}
+			}
+		}
+	}
 	if (frameIndex < 0)
 	{
 		frameIndex = 0;

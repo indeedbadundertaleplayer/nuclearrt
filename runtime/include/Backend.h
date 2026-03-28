@@ -7,6 +7,7 @@
 #include "Shape.h"
 #include "PakFile.h"
 #include "Shader.h"
+#include "Transition.h"
 class Backend {
 public:
 	Backend() = default;
@@ -16,7 +17,7 @@ public:
 
 	virtual void Initialize() {}
 	virtual void Deinitialize() {}
-
+	virtual bool WindowShown() { return false; }
 	virtual bool ShouldQuit() { return false; }
 
 	virtual std::string GetPlatformName() { return "Unknown"; }
@@ -33,6 +34,8 @@ public:
 	virtual void LoadTexture(int id) {}
 	virtual void UnloadTexture(int id) {}
 	virtual void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scaleX, int color, int effect, unsigned char effectParameter, float scaleY) {}
+	virtual void GetFrameTexture() {}
+	virtual void DrawFrameTexture(Transition* transition, float alpha) {}
 	virtual void DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape) {}
 	virtual void CreateShader(std::string name, int numSamplers, int numUniformBuffers, const unsigned char* code, int codeSize) {}
 	virtual void ClearShaders() {}
@@ -41,7 +44,6 @@ public:
 	virtual bool SetFragmentUniforms(std::string name, uint32_t slotIndex, const void* data, uint32_t length) { return false; }
 	virtual void DrawRectangle(int x, int y, int width, int height, int color) {}
 	virtual void DrawRectangleLines(int x, int y, int width, int height, int color) {}
-	virtual void DrawBGTexture(int x, int y, int width, int height, float scaleX, float scaleY) {}
 	virtual void DrawLine(int x1, int y1, int x2, int y2, int color) {}
 	virtual void DrawPixel(int x, int y, int color) {}
 	virtual void LoadFont(int id) {}
