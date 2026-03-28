@@ -72,8 +72,7 @@ void Application::Draw()
 
 void Application::Shutdown()
 {
-	std::cout << "Shutting down...\n";
-	backend->Deinitialize(); // Debating whether the backend destructor or the app shutdown should deinitialize... for now let App deinit backend.
+	std::cout << "Shutting down..." << std::endl;
 }
 
 static void Loop()

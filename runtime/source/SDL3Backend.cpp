@@ -194,9 +194,34 @@ void SDL3Backend::Initialize() {
 					}
 
 					if (ImGui::IsItemHovered()) {
-						DrawRectangle(instance->X, instance->Y, 32, 32, 0xFFFF0000);
-					}
+						if (instance->Type != 0 && instance->Type != 1 && instance->Type != 2) {
+							DrawRectangle(instance->X, instance->Y, 32, 32, 0xFFFF0000);
+						}
+						else {
+							unsigned int imageId = 0;
+							if (instance->Type == 1) // Backdrop
+							{
+								imageId = ((Backdrop*)instance)->Image;
+							}
+							else if (instance->Type == 0) // Quick backdrop
+							{
+								imageId = ((QuickBackdrop*)instance)->shape.Image;
+							}
+							else {
+								imageId = ((Active*)instance)->animations.GetCurrentImageHandle();
+							}
+							auto imageInfo = ImageBank::Instance().GetImage(imageId);
 
+							if (imageInfo) {
+								DrawRectangle(instance->X, instance->Y, imageInfo->Width, imageInfo->Height, 0xFFFF0000);
+							}
+							else {
+								DrawRectangle(instance->X, instance->Y, 32, 32, 0xFFFF0000);
+							}
+
+						}
+					}
+						// 
 					i++;
 				}
 				ImGui::TreePop();
@@ -1472,16 +1497,14 @@ void SDL3Backend::UpdateSample() {
 	}
 }
 // Sample End
-const uint8_t* SDL3Backend::GetKeyboardState()
+void SDL3Backend::GetKeyboardState(uint8_t* outBuffer)
 {
 	//return the keyboard state in a new array which matches the Fusion key codes
 	const bool* keyboardState = SDL_GetKeyboardState(nullptr);
-	uint8_t* fusionKeyboardState = new uint8_t[256];
 	for (int i = 0; i < 256; i++)
 	{
-		fusionKeyboardState[i] = keyboardState[FusionToSDLKey(i)] ? 1 : 0;
+		outBuffer[i] = keyboardState[FusionToSDLKey(i)] ? 1 : 0;
 	}
-	return fusionKeyboardState;
 }
 
 SDL_FRect SDL3Backend::CalculateRenderTargetRect()
@@ -1840,17 +1863,6 @@ void SDL3Backend::Delay(unsigned int ms)
 {
 	SDL_Delay(ms);
 }
-
-bool SDL3Backend::IsPixelTransparent(int textureId, int x, int y)
-{
-	auto imageInfo = ImageBank::Instance().GetImage(textureId);
-	if (!imageInfo) return true;
-	if (x < 0 || y < 0 || x >= imageInfo->Width || y >= imageInfo->Height) return true; //by taking account of padding, we can assume the outside pixels are transparent
-	const CollisionMask& mask = imageInfo->collisionMask;
-	if (mask.isSolid.empty()) return true;
-	return mask.isSolid[y * mask.width + x] == 0; //now that a mask has been made, this can be simplified easily
-}
-
 
 void SDL3Backend::GetTextureDimensions(int textureId, int& width, int& height)
 {

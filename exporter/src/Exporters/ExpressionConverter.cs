@@ -93,18 +93,22 @@ public class ExpressionConverter
         { (ObjectType.System, 2),  _ => $"Application::Instance().GetAppData()->GetGlobalValue(" }, // Global Value
         { (ObjectType.System, 3),  e => $"std::string(\"{e.Loader.ToString()}\")" },
 		{ (ObjectType.System, 4),  _ => $"std::to_string(" }, // Str$
+		{ (ObjectType.System, 5),  _ => $"std::stod(" }, // Val(
         { (ObjectType.System, 6),  _ => "\"\"" }, // Appdrive$ // TODO
         { (ObjectType.System, 7),  _ => "\"\"" }, // Appdir$ // TODO
         { (ObjectType.System, 8),  _ => "\"\"" }, // Apppath$ // TODO
         { (ObjectType.System, 9),  _ => "\"\"" }, // Appname$ // TODO
+		{ (ObjectType.System, 13),  _ => "std::sqrt(" }, // Square Root
         { (ObjectType.System, 19), _ => "StringLeft(" }, // String Left
         { (ObjectType.System, 20), _ => "StringRight(" }, // String Right
         { (ObjectType.System, 22), _ => "StringLength(" }, // String Length
 		{ (ObjectType.System, 23), e => (e.Loader as DoubleExp).FloatValue.ToString() },
-		{ (ObjectType.System, 29), _ => "std::abs(" }, // Abs(
+		{ (ObjectType.System, 24), e => $"Application::Instance().GetAppData()->GetGlobalValue({(e.Loader as GlobalCommon).Value})" }, // Global Value
+		{ (ObjectType.System, 29), _ => "std::abs(" }, // Abs(Loop Index
         { (ObjectType.System, 41), _ => "std::max(" }, // Max(
 		{ (ObjectType.System, 42), e => $"Application::Instance().GetColor({(e.Loader as Colour)}" }, // GetRGB(
         { (ObjectType.System, 46), _ => "Loopindex(" }, // LoopIndex
+		{ (ObjectType.System, 48), _ => "std::round(" }, // Round
 		{ (ObjectType.System, 50), e => $"Application::Instance().GetAppData()->GetGlobalStrings()[{(e.Loader as GlobalCommon).Value}]" },
 		{ (ObjectType.System, 56), _ => "\"\"" }, // AppTempPath$ // TODO
         { (ObjectType.System, 65), _ => "Application::Instance().RandomRange(" }, // RRandom
@@ -357,9 +361,9 @@ public class ExpressionConverter
 		if (convertToCCN)
 		{
 			var obj = GetObject(objectInfo, isGlobal);
-			if (obj.Item1 > short.MaxValue)
+			if (obj.Item1 >= short.MaxValue)
 			{
-				ObjectType = GetQualifierType(obj.Item1);
+				ObjectType = GetQualifierType(obj.Item2);
 			}
 			else
 			{
@@ -390,9 +394,19 @@ public class ExpressionConverter
 		}
 	}
 
-	static int GetQualifierType(int qualifier)
+	static int GetQualifierType(string qualifier)
 	{
-		return (qualifier & 0x7FFF) + 1;
+		string type = qualifier.Split('.')[1];
+		switch (type)
+		{
+			case "Sprite": return 2;
+			case "Text": return 3;
+			case "Question": return 4;
+			case "Score": return 5;
+			case "Lives": return 6;
+			case "Counter": return 7;
+			default: return 32;
+		}
 	}
 
 	public static Tuple<int, string, ObjectInstance> GetObject(int objectInfo, bool isGlobal = false, int frame = -1)
@@ -404,6 +418,7 @@ public class ExpressionConverter
 		int objectType = 0;
 		int systemQualifier = 0;
 		ObjectInstance objectInstance = null;
+		uint instanceHandle = 0;
 
 		List<EventObject> eventObjects;
 		if (isGlobal)
@@ -422,6 +437,7 @@ public class ExpressionConverter
 				objectName = evtObj.Name;
 				objectType = evtObj.ObjectType;
 				systemQualifier = evtObj.SystemQualifier;
+				instanceHandle = evtObj.InstanceHandle;
 
 				//Find object name in ccn frame
 				foreach (var ccnObj in Exporter.Instance.GameData.Frames[FrameIndex].objects)
@@ -437,7 +453,8 @@ public class ExpressionConverter
 			}
 		}
 
-		if (systemQualifier != 0)
+		if (systemQualifier != 0 ||
+		(objectName == "Group.Player" && systemQualifier == 0 && instanceHandle == 0)) // temp fix since system qualifier returns 0 for the player group
 		{
 			objectName = Utilities.GetQualifierName(systemQualifier, objectType - 1);
 			objectInfo = short.MaxValue + systemQualifier + 1;
