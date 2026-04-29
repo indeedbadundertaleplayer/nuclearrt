@@ -7,6 +7,7 @@
 #include "FontBank.h"
 #include "Shape.h"
 #include "PakFile.h"
+#include "EffectInstance.h"
 
 class Backend {
 public:
@@ -33,7 +34,7 @@ public:
 
 	virtual void LoadTexture(int id) {}
 	virtual void UnloadTexture(int id) {}
-	virtual void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter) {}
+	virtual void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter, EffectInstance* effectInstance = nullptr) {}
 	virtual void DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape) {}
 
 	virtual void DrawRectangle(int x, int y, int width, int height, int color) {}
@@ -43,7 +44,7 @@ public:
 
 	virtual void LoadFont(int id) {}
 	virtual void UnloadFont(int id) {}
-	virtual void DrawText(FontInfo* fontInfo, int x, int y, int color, const std::string& text, int objectHandle = -1) {}
+	virtual void DrawText(FontInfo* fontInfo, int x, int y, int color, const std::string& text, int objectHandle = -1, int rgbCoefficient = 0xFFFFFF, int effect = 0, unsigned char effectParameter = 0, EffectInstance* effectInstance = nullptr) {}
 	// Sample Start
 	virtual bool LoadSample(int id, int channel) {return false;}
 	virtual bool LoadSampleFile(std::string path) {return false;}

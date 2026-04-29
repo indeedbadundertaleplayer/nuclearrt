@@ -69,7 +69,7 @@ public:
 
 	void LoadTexture(int id) override;
 	void UnloadTexture(int id) override;
-	void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter) override;
+	void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter, EffectInstance* effectInstance = nullptr) override;
 	void DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape) override;
 	
 	void DrawRectangle(int x, int y, int width, int height, int color) override;
@@ -79,7 +79,7 @@ public:
 
 	void LoadFont(int id) override;
 	void UnloadFont(int id) override;
-	void DrawText(FontInfo* fontInfo, int x, int y, int color, const std::string& text, int objectHandle = -1) override;
+	void DrawText(FontInfo* fontInfo, int x, int y, int color, const std::string& text, int objectHandle = -1, int rgbCoefficient = 0xFFFFFF, int effect = 0, unsigned char effectParameter = 0, EffectInstance* effectInstance = nullptr) override;
 	// Sample Start
 	static void SDLCALL AudioCallback(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount);
 	bool LoadSample(int id, int channel) override;
@@ -173,9 +173,12 @@ private:
 	GLint gradientShaderColor1Loc = -1;
 	GLint gradientShaderColor2Loc = -1;
 	GLint gradientShaderVerticalLoc = -1;
+
+	std::unordered_map<std::string, EffectShader> thirdPartyShaders;
 	
 	void CreateStandardShaders();
 	void UseEffectShader(int effect);
+	EffectShader* GetOrLoadThirdPartyShader(const std::string& hash);
 	std::string LoadShaderSource(const std::string& filename);
 	GLuint CompileShader(GLenum type, const char* source);
 	GLuint CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc);

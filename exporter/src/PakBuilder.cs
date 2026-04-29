@@ -82,18 +82,28 @@ public class PakBuilder
 			}
 		}
 
-		//shaders
-		var shaderFolder = new DirectoryInfo(Path.Combine(outputPath.FullName, "shaders"));
+		//standard shaders
+		var shaderFolder = new DirectoryInfo(Path.Combine(outputPath.FullName, "shaders", "standard"));
 		if (shaderFolder.Exists)
 		{
 			foreach (var shaderFile in shaderFolder.GetFiles("*", SearchOption.AllDirectories))
 			{
 				var relativePath = Path.GetRelativePath(shaderFolder.FullName, shaderFile.FullName).Replace('\\', '/');
-				var entry = new PakEntry { Path = $"shaders/{relativePath}" };
+				var entry = new PakEntry { Path = $"shaders/standard/{relativePath}" };
 				entry.Data = File.ReadAllBytes(shaderFile.FullName);
 				entry.Size = (uint)entry.Data.Length;
 				entries.Add(entry);
 			}
+		}
+
+		//thirdparty shaders
+		var thirdPartyShaders = EffectBankExporter.thirdPartyShaders;
+		foreach (var shader in thirdPartyShaders)
+		{
+			var entry = new PakEntry { Path = $"shaders/thirdparty/{shader.Key}.frag" };
+			entry.Data = File.ReadAllBytes(shader.Value.FullName);
+			entry.Size = (uint)entry.Data.Length;
+			entries.Add(entry);
 		}
 
 		//clear any duplicates

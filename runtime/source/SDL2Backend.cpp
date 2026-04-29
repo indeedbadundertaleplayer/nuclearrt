@@ -323,7 +323,7 @@ void SDL2Backend::UnloadTexture(int id) {
 	textures.erase(id);
 }
 
-void SDL2Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter)
+void SDL2Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter, EffectInstance* effectInstance)
 {
 	SDL_Texture* texture = textures[id];
 	if (texture == nullptr) {
@@ -565,8 +565,14 @@ void SDL2Backend::UnloadFont(int id)
 	}
 }
 
-void SDL2Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const std::string& text)
+void SDL2Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const std::string& text, int objectHandle, int rgbCoefficient, int effect, unsigned char effectParameter, EffectInstance* effectInstance)
 {
+	(void)objectHandle;
+	(void)rgbCoefficient;
+	(void)effect;
+	(void)effectParameter;
+	(void)effectInstance;
+
 	TTF_Font* font = fonts[fontInfo->Handle];
 	if (font == nullptr) {
 		return;

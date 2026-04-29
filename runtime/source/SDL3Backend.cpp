@@ -378,6 +378,13 @@ void SDL3Backend::Deinitialize()
 		glDeleteProgram(gradientShaderProgram);
 		gradientShaderProgram = 0;
 	}
+
+	for (auto& pair : thirdPartyShaders) {
+		if (pair.second.program != 0) {
+			glDeleteProgram(pair.second.program);
+		}
+	}
+	thirdPartyShaders.clear();
 	
 	if (glContext != nullptr) {
 		SDL_GL_DestroyContext(glContext);
@@ -754,6 +761,13 @@ void SDL3Backend::RenderQuad(float x, float y, float w, float h, float angle, fl
 		mvpLoc = colorShaderMVPLoc;
 	} else if (static_cast<GLuint>(currentProgram) == gradientShaderProgram) {
 		mvpLoc = gradientShaderMVPLoc;
+	} else {
+		for (auto& pair : thirdPartyShaders) {
+			if (pair.second.program == static_cast<GLuint>(currentProgram)) {
+				mvpLoc = pair.second.mvpLoc;
+				break;
+			}
+		}
 	}
 	
 	if (mvpLoc != -1) {
@@ -844,7 +858,7 @@ void SDL3Backend::UnloadTexture(int id) {
 	textures.erase(it);
 }
 
-void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter)
+void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter, EffectInstance* effectInstance)
 {
 	auto imageInfo = ImageBank::Instance().GetImage(id);
 	if (!imageInfo) {
@@ -882,14 +896,55 @@ void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, in
 		glBlendFuncSeparate(GL_ZERO, GL_ONE_MINUS_SRC_COLOR, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 		needsBlendRestore = true;
 	}
-	
-	UseEffectShader(effect);
-	EffectShader& shader = effectShaders[effect];
-	
+
+	GLint texLoc = -1;
+	GLint colorLoc = -1;
+	GLuint program = 0;
+
+	if (effectInstance != nullptr) {
+		EffectShader* shader = GetOrLoadThirdPartyShader(effectInstance->filename);
+		if (shader != nullptr) {
+			glUseProgram(shader->program);
+			currentEffect = -1;
+			program = shader->program;
+			texLoc = shader->texLoc;
+			colorLoc = shader->colorLoc;
+
+			for (auto& param : effectInstance->Parameters) {
+				GLint pixelWidthLoc = glGetUniformLocation(shader->program, "fPixelWidth");
+				GLint pixelHeightLoc = glGetUniformLocation(shader->program, "fPixelHeight");
+				if (pixelWidthLoc >= 0) glUniform1f(pixelWidthLoc, 1.0f / texture.width);
+				if (pixelHeightLoc >= 0) glUniform1f(pixelHeightLoc, 1.0f / texture.height);
+
+				GLint loc = glGetUniformLocation(shader->program, param.Name.c_str());
+				if (loc < 0) continue;
+				if (param.Type == 0) { // Int
+					glUniform1i(loc, std::any_cast<int>(param.Value));
+				} else if (param.Type == 1) { // Float
+					glUniform1f(loc, std::any_cast<float>(param.Value));
+				} else if (param.Type == 2) { // Color
+					int c = std::any_cast<int>(param.Value);
+					float pr = (c & 0xFF) / 255.0f;
+					float pg = ((c >> 8) & 0xFF) / 255.0f;
+					float pb = ((c >> 16) & 0xFF) / 255.0f;
+					glUniform4f(loc, pr, pg, pb, 1.0f);
+				}
+			}
+		}
+	}
+
+	if (program == 0) {
+		UseEffectShader(effect);
+		EffectShader& shader = effectShaders[effect];
+		program = shader.program;
+		texLoc = shader.texLoc;
+		colorLoc = shader.colorLoc;
+	}
+
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture.textureId);
-	glUniform1i(shader.texLoc, 0);
-	glUniform4f(shader.colorLoc, r, g, b, a);
+	if (texLoc >= 0) glUniform1i(texLoc, 0);
+	if (colorLoc >= 0) glUniform4f(colorLoc, r, g, b, a);
 	
 	float drawX = static_cast<float>(x - offsetX);
 	float drawY = static_cast<float>(y - offsetY);
@@ -902,6 +957,34 @@ void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, in
 	if (needsBlendRestore) {
 		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 	}
+}
+
+SDL3Backend::EffectShader* SDL3Backend::GetOrLoadThirdPartyShader(const std::string& hash) {
+	auto it = thirdPartyShaders.find(hash);
+	if (it != thirdPartyShaders.end()) {
+		return &it->second;
+	}
+
+	std::string vertSrc = LoadShaderSource("shaders/standard/default.vert");
+	std::string fragSrc = LoadShaderSource("shaders/thirdparty/" + hash + ".frag");
+	if (vertSrc.empty() || fragSrc.empty()) {
+		return nullptr;
+	}
+
+	GLuint program = CreateShaderProgram(vertSrc.c_str(), fragSrc.c_str());
+	if (program == 0) {
+		std::cerr << "Failed to create third party shader: " << hash << std::endl;
+		return nullptr;
+	}
+
+	EffectShader shader;
+	shader.program = program;
+	shader.mvpLoc = glGetUniformLocation(program, "uMVP");
+	shader.texLoc = glGetUniformLocation(program, "uTexture");
+	shader.colorLoc = glGetUniformLocation(program, "uColor");
+
+	auto inserted = thirdPartyShaders.emplace(hash, shader);
+	return &inserted.first->second;
 }
 
 void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape)
@@ -1157,7 +1240,7 @@ void SDL3Backend::UnloadFont(int id)
 	}
 }
 
-void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const std::string& text, int objectHandle)
+void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const std::string& text, int objectHandle, int rgbCoefficient, int effect, unsigned char effectParameter, EffectInstance* effectInstance)
 {
 	if (fontInfo == nullptr) {
 		return;
@@ -1258,12 +1341,59 @@ void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const st
 		textCache[cacheKey] = cached;
 	}
 
-	UseEffectShader(0);
-	EffectShader& shader = effectShaders[0];
+	float r = ((rgbCoefficient >> 16) & 0xFF) / 255.0f;
+	float g = ((rgbCoefficient >> 8) & 0xFF) / 255.0f;
+	float b = (rgbCoefficient & 0xFF) / 255.0f;
+	float a = (255 - effectParameter) / 255.0f;
+
+	GLint texLoc = -1;
+	GLint colorLoc = -1;
+	GLuint program = 0;
+
+	if (effectInstance != nullptr) {
+		EffectShader* shader = GetOrLoadThirdPartyShader(effectInstance->filename);
+		if (shader != nullptr) {
+			glUseProgram(shader->program);
+			currentEffect = -1;
+			program = shader->program;
+			texLoc = shader->texLoc;
+			colorLoc = shader->colorLoc;
+
+			for (auto& param : effectInstance->Parameters) {
+				GLint pixelWidthLoc = glGetUniformLocation(shader->program, "fPixelWidth");
+				GLint pixelHeightLoc = glGetUniformLocation(shader->program, "fPixelHeight");
+				if (pixelWidthLoc >= 0) glUniform1f(pixelWidthLoc, 1.0f / static_cast<float>(texture.width));
+				if (pixelHeightLoc >= 0) glUniform1f(pixelHeightLoc, 1.0f / static_cast<float>(texture.height));
+
+				GLint loc = glGetUniformLocation(shader->program, param.Name.c_str());
+				if (loc < 0) continue;
+				if (param.Type == 0) {
+					glUniform1i(loc, std::any_cast<int>(param.Value));
+				} else if (param.Type == 1) {
+					glUniform1f(loc, std::any_cast<float>(param.Value));
+				} else if (param.Type == 2) {
+					int c = std::any_cast<int>(param.Value);
+					float pr = (c & 0xFF) / 255.0f;
+					float pg = ((c >> 8) & 0xFF) / 255.0f;
+					float pb = ((c >> 16) & 0xFF) / 255.0f;
+					glUniform4f(loc, pr, pg, pb, 1.0f);
+				}
+			}
+		}
+	}
+
+	if (program == 0) {
+		UseEffectShader(0);
+		EffectShader& shader = effectShaders[0];
+		program = shader.program;
+		texLoc = shader.texLoc;
+		colorLoc = shader.colorLoc;
+	}
+
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture.textureId);
-	glUniform1i(shader.texLoc, 0);
-	glUniform4f(shader.colorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+	if (texLoc >= 0) glUniform1i(texLoc, 0);
+	if (colorLoc >= 0) glUniform4f(colorLoc, r, g, b, a);
 	
 	RenderQuad(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height));
 }
