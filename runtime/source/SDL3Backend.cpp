@@ -23,6 +23,7 @@
 #include "imgui.h"
 #include <imgui_impl_sdl3.h>
 #endif
+
 SDL_AudioDeviceID SDL3Backend::audio_device = NULL;
 SDL3Backend::SDL3Backend() {
 }
@@ -63,6 +64,7 @@ void SDLCALL SDL3Backend::AudioCallback(void *userdata, SDL_AudioStream *stream,
 	}
 	SDL_PutAudioStreamData(stream, mixBuffer, static_cast<unsigned long long>(frames) * 2 * sizeof(float)); // Using static_cast from what visual studio recommended
 }
+
 void SDL3Backend::Initialize() {
 	int windowWidth = Application::Instance().GetAppData()->GetWindowWidth();
 	int windowHeight = Application::Instance().GetAppData()->GetWindowHeight();
@@ -80,7 +82,7 @@ void SDL3Backend::Initialize() {
 	}
 
 	// Create the window
-	SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
+	SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL;
 	window = SDL_CreateWindow(windowTitle.c_str(), windowWidth, windowHeight, flags);
 	if (window == nullptr) {
 		std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
@@ -99,33 +101,33 @@ void SDL3Backend::Initialize() {
 	SDL_BindAudioStream(audio_device, masterStream);
 	SDL_SetAudioStreamGetCallback(masterStream, AudioCallback, &channels); // Put callback only runs when SDL_PutAudioStreamData is ran, so use the getcallback to put data instead
 	std::cout << "Opened Audio Device.\n";
-	// Create the renderer
-	SDL_GPUShaderFormat shaderFormats = SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL;
-	gpuDevice = SDL_CreateGPUDevice(shaderFormats, false, nullptr);
-	if (gpuDevice == nullptr) {
-		std::cerr << "SDL_CreateGPUDevice Error: " << SDL_GetError() << std::endl;
+	
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	
+	glContext = SDL_GL_CreateContext(window);
+	if (glContext == nullptr) {
+		std::cerr << "SDL_GL_CreateContext Error: " << SDL_GetError() << std::endl;
 		return;
 	}
+		
+	SDL_GL_MakeCurrent(window, glContext);
+	SDL_GL_SetSwapInterval(1);
 
-	renderer = SDL_CreateGPURenderer(gpuDevice, window);
-	if (renderer == nullptr) {
-		std::cerr << "SDL_CreateGPURenderer Error: " << SDL_GetError() << std::endl;
+	
+	#if !defined(PLATFORM_MACOS)
+	GLenum glewErr = glewInit();
+	if (glewErr != GLEW_OK) {
+		std::cerr << "GLEW Init Error: " << glewGetErrorString(glewErr) << std::endl;
 		return;
 	}
+	#endif
+	
+	glEnable(GL_BLEND);
 
-	// Create the render target texture
-	renderTarget = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_TARGET, windowWidth, windowHeight);
-	if (renderTarget == nullptr) {
-		std::cerr << "SDL_CreateTexture Error: " << SDL_GetError() << std::endl;
-		return;
-	}
-
-	if (Application::Instance().GetAppData()->GetAntiAliasingWhenResizing()) {
-		SDL_SetTextureScaleMode(renderTarget, SDL_SCALEMODE_LINEAR);
-	}
-	else {
-		SDL_SetTextureScaleMode(renderTarget, SDL_SCALEMODE_NEAREST);
-	}
+	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
 	//load assets
 	if (!pakFile.Load(GetAssetsFileName())) {
@@ -133,8 +135,36 @@ void SDL3Backend::Initialize() {
 		return;
 	}
 
+	float verts[] = {
+		0.0f, 0.0f, 0.0f, 0.0f,
+		1.0f, 0.0f, 1.0f, 0.0f,
+		1.0f, 1.0f, 1.0f, 1.0f,
+		0.0f, 0.0f, 0.0f, 0.0f,
+		1.0f, 1.0f, 1.0f, 1.0f,
+		0.0f, 1.0f, 0.0f, 1.0f
+	};
+	
+	glGenVertexArrays(1, &quadVAO);
+	glGenBuffers(1, &quadVBO);
+	
+	glBindVertexArray(quadVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+	
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+	
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+
+	CreateStandardShaders();
+
+	CreateRenderTarget(windowWidth, windowHeight);
+
 #ifdef _DEBUG
-	DEBUG_UI.Initialize(window, renderer);
+	DEBUG_UI.Initialize(window, glContext);
 	
 	DEBUG_UI.AddWindow(Application::Instance().GetAppData()->GetAppName(), [this]() {
 		ImGui::Text("Platform: %s", GetPlatformName().c_str());
@@ -213,6 +243,12 @@ void SDL3Backend::Initialize() {
 							ImGui::Text("Value: %d", ((Counter*)instance)->GetValue());
 						}
 
+						if (ImGui::TreeNode("Effect")) {
+							ImGui::Text("Effect: %d", instance->Effect);
+							ImGui::Text("Effect Parameter: %d", instance->GetEffectParameter());
+							ImGui::TreePop();
+						}
+
 						ImGui::TreePop();
 					}
 
@@ -260,17 +296,19 @@ void SDL3Backend::Deinitialize()
 	DEBUG_UI.Shutdown();
 #endif
 
-	// cleanup mosaics
-	for (auto& pair : mosaics) {
-		SDL_DestroyTexture(pair.second);
+	// cleanup textures
+	for (auto& pair : textures) {
+		if (pair.second.textureId != 0) {
+			glDeleteTextures(1, &pair.second.textureId);
+		}
 	}
-	mosaics.clear();
-	imageToMosaic.clear();
-	mosaicToImages.clear();
+	textures.clear();
 
 	// cleanup text texture cache
 	for (auto& pair : textCache) {
-		SDL_DestroyTexture(pair.second.texture);
+		if (pair.second.texture.textureId != 0) {
+			glDeleteTextures(1, &pair.second.texture.textureId);
+		}
 	}
 	textCache.clear();
 
@@ -303,14 +341,42 @@ void SDL3Backend::Deinitialize()
 	SDL_DestroyAudioStream(masterStream);
 	SDL_CloseAudioDevice(audio_device);
 	std::cout << "AudioBackend shut down successfully.\n";
-	if (renderTarget != nullptr) {
-		SDL_DestroyTexture(renderTarget);
-		renderTarget = nullptr;
+	
+	if (renderTarget != 0) {
+		glDeleteFramebuffers(1, &renderTarget);
+		renderTarget = 0;
 	}
-	// Destroy the renderer
-	if (renderer != nullptr) {
-		SDL_DestroyRenderer(renderer);
-		renderer = nullptr;
+
+	if (renderTargetTexture != 0) {
+		glDeleteTextures(1, &renderTargetTexture);
+		renderTargetTexture = 0;
+	}
+
+	if (quadVAO != 0) {
+		glDeleteVertexArrays(1, &quadVAO);
+		quadVAO = 0;
+	}
+
+	if (quadVBO != 0) {
+		glDeleteBuffers(1, &quadVBO);
+		quadVBO = 0;
+	}
+
+	for (int i = 0; i < STANDARD_EFFECT_COUNT; i++) {
+		if (effectShaders[i].program != 0) {
+			glDeleteProgram(effectShaders[i].program);
+			effectShaders[i].program = 0;
+		}
+	}
+
+	if (colorShaderProgram != 0) {
+		glDeleteProgram(colorShaderProgram);
+		colorShaderProgram = 0;
+	}
+	
+	if (glContext != nullptr) {
+		SDL_GL_DestroyContext(glContext);
+		glContext = nullptr;
 	}
 	
 	// Destroy the window
@@ -369,37 +435,23 @@ std::string SDL3Backend::GetAssetsFileName()
 
 void SDL3Backend::BeginDrawing()
 {
-	if (renderer == nullptr) {
+	if (glContext == nullptr) {
 		std::cerr << "BeginDrawing called with null renderer!" << std::endl;
 		return;
 	}
+
+	currentEffect = -1;
 
 	//resize render target if needed
 	int newWidth = std::min(Application::Instance().GetAppData()->GetWindowWidth(), Application::Instance().GetCurrentFrame()->Width);
 	int newHeight = std::min(Application::Instance().GetAppData()->GetWindowHeight(), Application::Instance().GetCurrentFrame()->Height);
 
-	float currentWidth, currentHeight;
-	SDL_GetTextureSize(renderTarget, &currentWidth, &currentHeight);
-	if (newWidth != static_cast<int>(currentWidth) || newHeight != static_cast<int>(currentHeight)) {
-		SDL_DestroyTexture(renderTarget);
-		renderTarget = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_TARGET, newWidth, newHeight);
-		if (renderTarget == nullptr) {
-			std::cerr << "SDL_CreateTexture Error (resize): " << SDL_GetError() << std::endl;
-		}
-
-		if (Application::Instance().GetAppData()->GetAntiAliasingWhenResizing()) {
-			SDL_SetTextureScaleMode(renderTarget, SDL_SCALEMODE_LINEAR);
-		}
-		else {
-			SDL_SetTextureScaleMode(renderTarget, SDL_SCALEMODE_NEAREST);
-		}
+	if (newWidth != renderTargetWidth || newHeight != renderTargetHeight) {
+		CreateRenderTarget(newWidth, newHeight);
 	}
 	
-	SDL_SetRenderTarget(renderer, renderTarget);
-	
-	SDL_Color borderColor = RGBToSDLColor(Application::Instance().GetAppData()->GetBorderColor());
-	SDL_SetRenderDrawColor(renderer, borderColor.r, borderColor.g, borderColor.b, SDL_ALPHA_OPAQUE);
-	SDL_RenderClear(renderer);
+	glBindFramebuffer(GL_FRAMEBUFFER, renderTarget);
+	glViewport(0, 0, renderTargetWidth, renderTargetHeight);
 
 #ifdef _DEBUG
 	DEBUG_UI.BeginFrame();
@@ -408,25 +460,52 @@ void SDL3Backend::BeginDrawing()
 
 void SDL3Backend::EndDrawing()
 {
-	if (renderer == nullptr) {
+	if (glContext == nullptr) {
 		std::cerr << "EndDrawing called with null renderer!" << std::endl;
 		return;
 	}
 
-	SDL_SetRenderTarget(renderer, nullptr);
+	// unbind render target
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	
-	SDL_Color borderColor = RGBToSDLColor(Application::Instance().GetAppData()->GetBorderColor());
-	SDL_SetRenderDrawColor(renderer, borderColor.r, borderColor.g, borderColor.b, SDL_ALPHA_OPAQUE);
-	SDL_RenderClear(renderer);
+	int windowWidth, windowHeight;
+	SDL_GetWindowSize(window, &windowWidth, &windowHeight);
+	glViewport(0, 0, windowWidth, windowHeight);
+	
+	// clear with border color
+	int borderColor = Application::Instance().GetAppData()->GetBorderColor();
+	float r = ((borderColor >> 16) & 0xFF) / 255.0f;
+	float g = ((borderColor >> 8) & 0xFF) / 255.0f;
+	float b = (borderColor & 0xFF) / 255.0f;
+	glClearColor(r, g, b, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 	
 	SDL_FRect rect = CalculateRenderTargetRect();
-	SDL_RenderTexture(renderer, renderTarget, nullptr, &rect);
+	
+	UseEffectShader(0);
+	EffectShader& shader = effectShaders[0];
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, renderTargetTexture);
+	glUniform1i(shader.texLoc, 0);
+	glUniform4f(shader.colorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+	
+	float mvp[16] = {
+		2.0f * rect.w / windowWidth, 0.0f, 0.0f, 0.0f,
+		0.0f, 2.0f * rect.h / windowHeight, 0.0f, 0.0f,
+		0.0f, 0.0f, -1.0f, 0.0f,
+		2.0f * rect.x / windowWidth - 1.0f, -(2.0f * rect.y / windowHeight - 1.0f) - 2.0f * rect.h / windowHeight, 0.0f, 1.0f
+	};
+	glUniformMatrix4fv(shader.mvpLoc, 1, GL_FALSE, mvp);
+	
+	glBindVertexArray(quadVAO);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+	glBindVertexArray(0);
 
 #ifdef _DEBUG
 	DEBUG_UI.EndFrame();
 #endif
 
-	SDL_RenderPresent(renderer);
+	SDL_GL_SwapWindow(window);
 
 	if (!renderedFirstFrame) {
 		renderedFirstFrame = true;
@@ -436,13 +515,247 @@ void SDL3Backend::EndDrawing()
 
 void SDL3Backend::Clear(int color)
 {
-	SDL_SetRenderDrawColor(renderer, (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, SDL_ALPHA_OPAQUE);
-	SDL_RenderClear(renderer);
+	float r = ((color >> 16) & 0xFF) / 255.0f;
+	float g = ((color >> 8) & 0xFF) / 255.0f;
+	float b = (color & 0xFF) / 255.0f;
+	glClearColor(r, g, b, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+}
+
+GLuint SDL3Backend::CompileShader(GLenum type, const char* source) {
+	GLuint shader = glCreateShader(type);
+	glShaderSource(shader, 1, &source, nullptr);
+	glCompileShader(shader);
+	
+	GLint success;
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+	if (!success) {
+		char infoLog[512];
+		glGetShaderInfoLog(shader, 512, nullptr, infoLog);
+		std::cerr << "Shader compilation error: " << infoLog << std::endl;
+		return 0;
+	}
+	return shader;
+}
+
+GLuint SDL3Backend::CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc) {
+	GLuint vertexShader = CompileShader(GL_VERTEX_SHADER, vertexSrc);
+	GLuint fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragmentSrc);
+	
+	if (vertexShader == 0 || fragmentShader == 0) {
+		return 0;
+	}
+	
+	GLuint program = glCreateProgram();
+	glAttachShader(program, vertexShader);
+	glAttachShader(program, fragmentShader);
+	glLinkProgram(program);
+	
+	GLint success;
+	glGetProgramiv(program, GL_LINK_STATUS, &success);
+	if (!success) {
+		char infoLog[512];
+		glGetProgramInfoLog(program, 512, nullptr, infoLog);
+		std::cerr << "Shader link error: " << infoLog << std::endl;
+		return 0;
+	}
+	
+	glDeleteShader(vertexShader);
+	glDeleteShader(fragmentShader);
+	
+	return program;
+}
+
+std::string SDL3Backend::LoadShaderSource(const std::string& filename) {
+	std::vector<uint8_t> data = pakFile.GetData(filename);
+	if (data.empty()) {
+		std::cerr << "Failed to load shader: " << filename << std::endl;
+		return "";
+	}
+	return std::string(reinterpret_cast<char*>(data.data()), data.size());
+}
+
+void SDL3Backend::CreateStandardShaders() {
+	std::string vertexSrc = LoadShaderSource("shaders/standard/default.vert");
+	if (vertexSrc.empty()) {
+		std::cerr << "Failed to load default vertex shader" << std::endl;
+		return;
+	}
+	
+	// guh
+	const char* effectFiles[STANDARD_EFFECT_COUNT] = {
+		"shaders/standard/normal.frag",
+		"shaders/standard/semitransparent.frag",
+		"shaders/standard/inverted.frag",
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		"shaders/standard/add.frag",
+		"shaders/standard/monochrome.frag",
+		"shaders/standard/subtract.frag",
+		nullptr
+	};
+	
+	for (int i = 0; i < STANDARD_EFFECT_COUNT; i++) {
+		// fallback the normal shader
+		const char* fragFile = effectFiles[i] ? effectFiles[i] : effectFiles[0];
+		std::string fragSrc = LoadShaderSource(fragFile);
+		if (fragSrc.empty()) {
+			std::cerr << "Failed to load fragment shader: " << fragFile << std::endl;
+			continue;
+		}
+		
+		effectShaders[i].program = CreateShaderProgram(vertexSrc.c_str(), fragSrc.c_str());
+		if (effectShaders[i].program == 0) {
+			std::cerr << "Failed to create effect shader " << i << std::endl;
+			continue;
+		}
+		
+		effectShaders[i].mvpLoc = glGetUniformLocation(effectShaders[i].program, "uMVP");
+		effectShaders[i].texLoc = glGetUniformLocation(effectShaders[i].program, "uTexture");
+		effectShaders[i].colorLoc = glGetUniformLocation(effectShaders[i].program, "uColor");
+	}
+	
+	// load color shaders for shapes and shit
+	std::string colorVertSrc = LoadShaderSource("shaders/standard/color.vert");
+	std::string colorFragSrc = LoadShaderSource("shaders/standard/color.frag");
+	if (colorVertSrc.empty() || colorFragSrc.empty()) {
+		std::cerr << "Failed to load color shaders" << std::endl;
+		return;
+	}
+	
+	colorShaderProgram = CreateShaderProgram(colorVertSrc.c_str(), colorFragSrc.c_str());
+	if (colorShaderProgram == 0) {
+		std::cerr << "Failed to create color shader program" << std::endl;
+		return;
+	}
+	
+	colorShaderMVPLoc = glGetUniformLocation(colorShaderProgram, "uMVP");
+	colorShaderColorLoc = glGetUniformLocation(colorShaderProgram, "uColor");
+}
+
+void SDL3Backend::UseEffectShader(int effect) {
+	if (effect < 0 || effect >= STANDARD_EFFECT_COUNT) {
+		effect = 0;
+	}
+	
+	if (currentEffect == effect && currentEffect >= 0) {
+		return;
+	}
+	
+	currentEffect = effect;
+	glUseProgram(effectShaders[effect].program);
+}
+
+void SDL3Backend::CreateRenderTarget(int width, int height) {
+	if (renderTarget != 0) {
+		glDeleteFramebuffers(1, &renderTarget);
+		glDeleteTextures(1, &renderTargetTexture);
+	}
+	
+	renderTargetWidth = width;
+	renderTargetHeight = height;
+	
+	glGenFramebuffers(1, &renderTarget);
+	glBindFramebuffer(GL_FRAMEBUFFER, renderTarget);
+	
+	glGenTextures(1, &renderTargetTexture);
+	glBindTexture(GL_TEXTURE_2D, renderTargetTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	
+	if (Application::Instance().GetAppData()->GetAntiAliasingWhenResizing()) {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	} else {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	}
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTargetTexture, 0);
+	
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		std::cerr << "Framebuffer is not complete!" << std::endl;
+	}
+	
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void SDL3Backend::SetOrthoProjection(GLuint program, GLint mvpLoc, float width, float height) {
+	float mvp[16] = {
+		2.0f / width, 0.0f, 0.0f, 0.0f,
+		0.0f, -2.0f / height, 0.0f, 0.0f,
+		0.0f, 0.0f, -1.0f, 0.0f,
+		-1.0f, 1.0f, 0.0f, 1.0f
+	};
+	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp);
+}
+
+void SDL3Backend::RenderQuad(float x, float y, float w, float h, float angle, float pivotX, float pivotY, float u0, float v0, float u1, float v1) {
+	float rad = angle * (3.14159265358979323846f / 180.0f);
+	float cosA = cosf(rad);
+	float sinA = sinf(rad);
+	
+	// Translate to position, rotate around pivot, scale
+	float transform[16] = {
+		w * cosA, w * sinA, 0.0f, 0.0f,
+		-h * sinA, h * cosA, 0.0f, 0.0f,
+		0.0f, 0.0f, 1.0f, 0.0f,
+		x + pivotX * (1 - cosA) + pivotY * sinA,
+		y + pivotY * (1 - cosA) - pivotX * sinA,
+		0.0f, 1.0f
+	};
+	
+	float orthoW = static_cast<float>(renderTargetWidth);
+	float orthoH = static_cast<float>(renderTargetHeight);
+	
+	float mvp[16] = {
+		2.0f / orthoW * transform[0], -2.0f / orthoH * transform[1], 0.0f, 0.0f,
+		2.0f / orthoW * transform[4], -2.0f / orthoH * transform[5], 0.0f, 0.0f,
+		0.0f, 0.0f, -1.0f, 0.0f,
+		2.0f / orthoW * transform[12] - 1.0f, -2.0f / orthoH * transform[13] + 1.0f, 0.0f, 1.0f
+	};
+	
+	GLint currentProgram;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &currentProgram);
+	
+	GLint mvpLoc = -1;
+	// check effect shaders
+	if (currentEffect >= 0 && currentEffect < STANDARD_EFFECT_COUNT && 
+		static_cast<GLuint>(currentProgram) == effectShaders[currentEffect].program) {
+		mvpLoc = effectShaders[currentEffect].mvpLoc;
+	} else if (static_cast<GLuint>(currentProgram) == colorShaderProgram) {
+		mvpLoc = colorShaderMVPLoc;
+	}
+	
+	if (mvpLoc != -1) {
+		glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp);
+	}
+
+	// update uv coords for this draw
+	float verts[] = {
+		0.0f, 0.0f, u0, v0,
+		1.0f, 0.0f, u1, v0,
+		1.0f, 1.0f, u1, v1,
+		0.0f, 0.0f, u0, v0,
+		1.0f, 1.0f, u1, v1,
+		0.0f, 1.0f, u0, v1
+	};
+	glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(verts), verts);
+
+	glBindVertexArray(quadVAO);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+	glBindVertexArray(0);
 }
 
 void SDL3Backend::LoadTexture(int id) {
 	//check if texture is already loaded
-	if (imageToMosaic.find(id) != imageToMosaic.end()) {
+	if (textures.find(id) != textures.end()) {
 		return;
 	}
 
@@ -452,55 +765,59 @@ void SDL3Backend::LoadTexture(int id) {
 		return;
 	}
 
-	int mosaicIndex = imageInfo->MosaicIndex;
-	if (mosaicIndex < 0) {
-		std::cerr << "LoadTexture Error: " << "Image with id " << id << " has invalid mosaic index" << std::endl;
+	char imageFileName[32];
+	std::snprintf(imageFileName, sizeof(imageFileName), "images/%d.png", id);
+	
+	std::vector<uint8_t> data = pakFile.GetData(imageFileName);
+	if (data.empty()) {
+		std::cerr << "PakFile::GetData Error: " << "Image " << imageFileName << " not found" << std::endl;
+		return;
+	}
+
+	SDL_IOStream* stream = SDL_IOFromMem(data.data(), data.size());
+	SDL_Surface* surface = IMG_Load_IO(stream, true);
+	if (surface == nullptr) {
+		std::cerr << "IMG_Load_IO Error: " << SDL_GetError() << std::endl;
 		return;
 	}
 	
-	if (mosaics.find(mosaicIndex) == mosaics.end()) {
-		char mosaicFileName[32];
-		std::snprintf(mosaicFileName, sizeof(mosaicFileName), "images/m%05d.png", mosaicIndex);
-		
-		std::vector<uint8_t> data = pakFile.GetData(mosaicFileName);
-		if (data.empty()) {
-			std::cerr << "PakFile::GetData Error: " << "Mosaic " << mosaicFileName << " not found" << std::endl;
-			return;
-		}
-
-		SDL_IOStream* stream = SDL_IOFromMem(data.data(), data.size());
-		SDL_Texture* mosaicTexture = IMG_LoadTexture_IO(renderer, stream, true);
-		if (mosaicTexture == nullptr) {
-			std::cerr << "IMG_LoadTexture_IO Error: " << SDL_GetError() << std::endl;
-			return;
-		}
-
-		mosaics[mosaicIndex] = mosaicTexture;
+	SDL_Surface* rgbaSurface = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
+	SDL_DestroySurface(surface);
+	if (rgbaSurface == nullptr) {
+		std::cerr << "SDL_ConvertSurface Error: " << SDL_GetError() << std::endl;
+		return;
 	}
-
-	imageToMosaic[id] = mosaicIndex;
-	mosaicToImages[mosaicIndex].insert(id);
+	
+	GLTexture texture;
+	glGenTextures(1, &texture.textureId);
+	glBindTexture(GL_TEXTURE_2D, texture.textureId);
+	
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgbaSurface->w, rgbaSurface->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgbaSurface->pixels);
+	
+	texture.width = rgbaSurface->w;
+	texture.height = rgbaSurface->h;
+	
+	SDL_DestroySurface(rgbaSurface);
+	
+	textures[id] = texture;
 }
 
 void SDL3Backend::UnloadTexture(int id) {
-	auto mosaicIt = imageToMosaic.find(id);
-	if (mosaicIt == imageToMosaic.end()) {
+	auto it = textures.find(id);
+	if (it == textures.end()) {
 		return;
 	}
 	
-	int mosaicIndex = mosaicIt->second;
-	mosaicToImages[mosaicIndex].erase(id);
-	imageToMosaic.erase(mosaicIt);
-	
-	//if no more images use this mosaic, unload it
-	if (mosaicToImages[mosaicIndex].empty()) {
-		auto mosaicTextureIt = mosaics.find(mosaicIndex);
-		if (mosaicTextureIt != mosaics.end()) {
-			SDL_DestroyTexture(mosaicTextureIt->second);
-			mosaics.erase(mosaicTextureIt);
-		}
-		mosaicToImages.erase(mosaicIndex);
+	if (it->second.textureId != 0) {
+		glDeleteTextures(1, &it->second.textureId);
 	}
+
+	textures.erase(it);
 }
 
 void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter)
@@ -510,67 +827,55 @@ void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, in
 		return;
 	}
 	
-	auto mosaicIt = imageToMosaic.find(id);
-	if (mosaicIt == imageToMosaic.end()) {
+	auto texIt = textures.find(id);
+	if (texIt == textures.end()) {
 		return;
 	}
 	
-	int mosaicIndex = mosaicIt->second;
-	auto mosaicTextureIt = mosaics.find(mosaicIndex);
-	if (mosaicTextureIt == mosaics.end()) {
-		return;
-	}
+	GLTexture& texture = texIt->second;
 	
-	SDL_Texture* texture = mosaicTextureIt->second;
+	float r = ((color >> 16) & 0xFF) / 255.0f;
+	float g = ((color >> 8) & 0xFF) / 255.0f;
+	float b = (color & 0xFF) / 255.0f;
+	float a = (255 - effectParameter) / 255.0f;
 	
-	SDL_FRect srcRect = {
-		static_cast<float>(imageInfo->MosaicX),
-		static_cast<float>(imageInfo->MosaicY),
-		static_cast<float>(imageInfo->Width),
-		static_cast<float>(imageInfo->Height)
-	};
-	
-	// Save original texture properties
-	Uint8 origR, origG, origB, origA;
-	SDL_BlendMode origBlendMode;
-	SDL_GetTextureColorMod(texture, &origR, &origG, &origB);
-	SDL_GetTextureAlphaMod(texture, &origA);
-	SDL_GetTextureBlendMode(texture, &origBlendMode);
-	
-	// Apply new color
-	Uint8 r = (color >> 16) & 0xFF;
-	Uint8 g = (color >> 8) & 0xFF;
-	Uint8 b = color & 0xFF;
-	SDL_SetTextureColorMod(texture, r, g, b);
-	
-	//get texture dimensions
-	int width = imageInfo->Width;
-	int height = imageInfo->Height;
-	SDL_FRect rect = { static_cast<float>(x - offsetX), static_cast<float>(y - offsetY), static_cast<float>(width), static_cast<float>(height) };
-	
-	//Effects
-	switch (effect) {
-		case 4096:
-		case 0:
-			SDL_SetTextureAlphaMod(texture, 255 - effectParameter);
-			break;
-		case 1: // Semi-Transparent:
-			SDL_SetTextureColorMod(texture, 255, 255, 255);
-			SDL_SetTextureAlphaMod(texture, 255 - effectParameter);
-			break;
-		case 9: // Additive
-			SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_ADD);
-			SDL_SetTextureAlphaMod(texture, 255 - effectParameter);
-			break;
-	}
 
-	SDL_FPoint center{ static_cast<float>(offsetX), static_cast<float>(offsetY) };
-	SDL_RenderTextureRotated(renderer, texture, &srcRect, &rect, 360 - angle, &center, SDL_FLIP_NONE);
+	bool needsBlendRestore = false;
 	
-	// Restore original texture properties
-	SDL_SetTextureColorMod(texture, origR, origG, origB);
-	SDL_SetTextureAlphaMod(texture, origA);
-	SDL_SetTextureBlendMode(texture, origBlendMode);
+	if (effect == 1) { // Semi-Transparent
+		glBlendFuncSeparate(GL_ONE_MINUS_DST_COLOR, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		needsBlendRestore = true;
+	}
+	else if (effect == 9) // Add
+	{
+		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ONE, GL_ONE);
+		needsBlendRestore = true;
+	}
+	else if (effect == 11) // Subtract
+	{
+		glBlendFuncSeparate(GL_ZERO, GL_ONE_MINUS_SRC_COLOR, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		needsBlendRestore = true;
+	}
+	
+	UseEffectShader(effect);
+	EffectShader& shader = effectShaders[effect];
+	
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture.textureId);
+	glUniform1i(shader.texLoc, 0);
+	glUniform4f(shader.colorLoc, r, g, b, a);
+	
+	float drawX = static_cast<float>(x - offsetX);
+	float drawY = static_cast<float>(y - offsetY);
+	float width = static_cast<float>(imageInfo->Width);
+	float height = static_cast<float>(imageInfo->Height);
+	float drawAngle = static_cast<float>(360 - angle);
+	
+	RenderQuad(drawX, drawY, width, height, drawAngle, static_cast<float>(offsetX), static_cast<float>(offsetY));
+	
+	if (needsBlendRestore) {
+		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	}
 }
 
 void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape)
@@ -578,102 +883,76 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 	//TODO: Borders
 	//TODO: Ellipse masks
 	if (shape->ShapeType == 1) { // Line
-		SDL_SetRenderDrawColor(renderer, (shape->BorderColor >> 16) & 0xFF, (shape->BorderColor >> 8) & 0xFF, shape->BorderColor & 0xFF, SDL_ALPHA_OPAQUE);
-
 		int x1 = shape->FlipX ? x + width : x;
 		int y1 = shape->FlipY ? y + height : y;
 		int x2 = shape->FlipX ? x : x + width;
 		int y2 = shape->FlipY ? y : y + height;
 
 		//TODO: BorderSize
-		SDL_RenderLine(renderer, x1, y1, x2, y2);
+		DrawLine(x1, y1, x2, y2, shape->BorderColor | 0xFF000000);
 	}
 	else {
 		if (shape->FillType == 1) { // Solid Color
-			SDL_SetRenderDrawColor(renderer, (shape->Color1 >> 16) & 0xFF, (shape->Color1 >> 8) & 0xFF, shape->Color1 & 0xFF, SDL_ALPHA_OPAQUE);
-			SDL_FRect rect = { static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height) };
-			SDL_RenderFillRect(renderer, &rect);
+			DrawRectangle(x, y, width, height, shape->Color1 | 0xFF000000);
 		}
 		else if (shape->FillType == 2) { // Gradient
-			Uint8 r1 = (shape->Color1 >> 16) & 0xFF;
-			Uint8 g1 = (shape->Color1 >> 8) & 0xFF;
-			Uint8 b1 = shape->Color1 & 0xFF;
+			float r1 = ((shape->Color1 >> 16) & 0xFF) / 255.0f;
+			float g1 = ((shape->Color1 >> 8) & 0xFF) / 255.0f;
+			float b1 = (shape->Color1 & 0xFF) / 255.0f;
 			
-			Uint8 r2 = (shape->Color2 >> 16) & 0xFF;
-			Uint8 g2 = (shape->Color2 >> 8) & 0xFF;
-			Uint8 b2 = shape->Color2 & 0xFF;
+			float r2 = ((shape->Color2 >> 16) & 0xFF) / 255.0f;
+			float g2 = ((shape->Color2 >> 8) & 0xFF) / 255.0f;
+			float b2 = (shape->Color2 & 0xFF) / 255.0f;
 			
-			if (shape->VerticalGradient) {
+			if (!shape->VerticalGradient) {
 				// Vertical gradient (top to bottom)
 				for (int i = 0; i < height; i++) {
 					float ratio = static_cast<float>(i) / static_cast<float>(height);
 					
-					Uint8 r = static_cast<Uint8>(r1 + (r2 - r1) * ratio);
-					Uint8 g = static_cast<Uint8>(g1 + (g2 - g1) * ratio);
-					Uint8 b = static_cast<Uint8>(b1 + (b2 - b1) * ratio);
+					float r = r1 + (r2 - r1) * ratio;
+					float g = g1 + (g2 - g1) * ratio;
+					float b = b1 + (b2 - b1) * ratio;
 					
-					SDL_SetRenderDrawColor(renderer, r, g, b, SDL_ALPHA_OPAQUE);
-					SDL_RenderLine(renderer, x, y + i, x + width - 1, y + i);
+					int lineColor = (static_cast<int>(r * 255) << 16) | (static_cast<int>(g * 255) << 8) | static_cast<int>(b * 255) | 0xFF000000;
+					DrawLine(x, y + i, x + width - 1, y + i, lineColor);
 				}
 			} else {
 				// Horizontal gradient (left to right)
 				for (int i = 0; i < width; i++) {
 					float ratio = static_cast<float>(i) / static_cast<float>(width);
-					
-					Uint8 r = static_cast<Uint8>(r1 + (r2 - r1) * ratio);
-					Uint8 g = static_cast<Uint8>(g1 + (g2 - g1) * ratio);
-					Uint8 b = static_cast<Uint8>(b1 + (b2 - b1) * ratio);
-					
-					SDL_SetRenderDrawColor(renderer, r, g, b, SDL_ALPHA_OPAQUE);
-					SDL_RenderLine(renderer, x + i, y, x + i, y + height - 1);
+
+					float r = r1 + (r2 - r1) * ratio;
+					float g = g1 + (g2 - g1) * ratio;
+					float b = b1 + (b2 - b1) * ratio;
+
+					int lineColor = (static_cast<int>(r * 255) << 16) | (static_cast<int>(g * 255) << 8) | static_cast<int>(b * 255) | 0xFF000000;
+					DrawLine(x + i, y, x + i, y + height - 1, lineColor);
 				}
 			}
 		}
-		else if (shape->FillType == 3) { // Motif
-			auto imageInfo = ImageBank::Instance().GetImage(shape->Image);
-			if (!imageInfo) {
+		else if (shape->FillType == 3) { // Motif 
+			auto texIt = textures.find(shape->Image);
+			if (texIt == textures.end()) {
 				return;
 			}
 			
-			auto mosaicIt = imageToMosaic.find(shape->Image);
-			if (mosaicIt == imageToMosaic.end()) {
-				return;
-			}
+			GLTexture& texture = texIt->second;
 			
-			int mosaicIndex = mosaicIt->second;
-			auto mosaicTextureIt = mosaics.find(mosaicIndex);
-			if (mosaicTextureIt == mosaics.end()) {
-				return;
-			}
+			UseEffectShader(0);
+			EffectShader& shader = effectShaders[0];
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, texture.textureId);
+			glUniform1i(shader.texLoc, 0);
+			glUniform4f(shader.colorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
 			
-			SDL_Texture* texture = mosaicTextureIt->second;
-			
-			SDL_FRect baseSrcRect = {
-				static_cast<float>(imageInfo->MosaicX),
-				static_cast<float>(imageInfo->MosaicY),
-				static_cast<float>(imageInfo->Width),
-				static_cast<float>(imageInfo->Height)
-			};
-			
-			int textureWidth = imageInfo->Width;
-			int textureHeight = imageInfo->Height;
-			
-			// Tile the texture across the entire area
-			for (int tileY = y; tileY < y + height; tileY += textureHeight) {
-				for (int tileX = x; tileX < x + width; tileX += textureWidth) {
-					// Calculate the width and height of this tile (might be smaller at edges)
-					int tileW = std::min(textureWidth, x + width - tileX);
-					int tileH = std::min(textureHeight, y + height - tileY);
-					
-					SDL_FRect destRect = { static_cast<float>(tileX), static_cast<float>(tileY), static_cast<float>(tileW), static_cast<float>(tileH) };
-					//adjust source rect for partial tiles
-					SDL_FRect tileSrcRect = {
-						baseSrcRect.x,
-						baseSrcRect.y,
-						static_cast<float>(tileW),
-						static_cast<float>(tileH)
-					};
-					SDL_RenderTexture(renderer, texture, &tileSrcRect, &destRect);
+			// THIS SUCKS
+			for (int tileY = y; tileY < y + height; tileY += texture.height) {
+				for (int tileX = x; tileX < x + width; tileX += texture.width) {
+					int tileW = std::min(texture.width, x + width - tileX);
+					int tileH = std::min(texture.height, y + height - tileY);
+					float u1 = static_cast<float>(tileW) / static_cast<float>(texture.width);
+					float v1 = static_cast<float>(tileH) / static_cast<float>(texture.height);
+					RenderQuad(static_cast<float>(tileX), static_cast<float>(tileY), static_cast<float>(tileW), static_cast<float>(tileH), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, u1, v1);
 				}
 			}
 		}
@@ -682,28 +961,106 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 
 void SDL3Backend::DrawRectangle(int x, int y, int width, int height, int color)
 {
-	SDL_SetRenderDrawColor(renderer, (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, (color >> 24) & 0xFF);
-	SDL_FRect rect = { static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height) };
-	SDL_RenderFillRect(renderer, &rect);
+	float r = ((color >> 16) & 0xFF) / 255.0f;
+	float g = ((color >> 8) & 0xFF) / 255.0f;
+	float b = (color & 0xFF) / 255.0f;
+	float a = ((color >> 24) & 0xFF) / 255.0f;
+	
+	glUseProgram(colorShaderProgram);
+	currentEffect = -1;
+	glUniform4f(colorShaderColorLoc, r, g, b, a);
+	
+	RenderQuad(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height));
 }
 
 void SDL3Backend::DrawRectangleLines(int x, int y, int width, int height, int color)
 {
-	SDL_SetRenderDrawColor(renderer, (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, (color >> 24) & 0xFF);
-	SDL_FRect rect = { static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height) };
-	SDL_RenderRect(renderer, &rect);
+	DrawLine(x, y, x + width - 1, y, color);
+	DrawLine(x + width - 1, y, x + width - 1, y + height - 1, color);
+	DrawLine(x + width - 1, y + height - 1, x, y + height - 1, color);
+	DrawLine(x, y + height - 1, x, y, color);
 }
 
 void SDL3Backend::DrawLine(int x1, int y1, int x2, int y2, int color)
 {
-	SDL_SetRenderDrawColor(renderer, (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, (color >> 24) & 0xFF);
-	SDL_RenderLine(renderer, x1, y1, x2, y2);
+	float r = ((color >> 16) & 0xFF) / 255.0f;
+	float g = ((color >> 8) & 0xFF) / 255.0f;
+	float b = (color & 0xFF) / 255.0f;
+	float a = ((color >> 24) & 0xFF) / 255.0f;
+	
+	float lineVerts[] = {
+		static_cast<float>(x1), static_cast<float>(y1),
+		static_cast<float>(x2), static_cast<float>(y2)
+	};
+	
+	// create tmp vao/vbo
+	GLuint lineVAO, lineVBO;
+	glGenVertexArrays(1, &lineVAO);
+	glGenBuffers(1, &lineVBO);
+	
+	glBindVertexArray(lineVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(lineVerts), lineVerts, GL_STREAM_DRAW);
+	
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	
+	glUseProgram(colorShaderProgram);
+	currentEffect = -1;
+	glUniform4f(colorShaderColorLoc, r, g, b, a);
+	
+	float mvp[16] = {
+		2.0f / renderTargetWidth, 0.0f, 0.0f, 0.0f,
+		0.0f, -2.0f / renderTargetHeight, 0.0f, 0.0f,
+		0.0f, 0.0f, -1.0f, 0.0f,
+		-1.0f, 1.0f, 0.0f, 1.0f
+	};
+	glUniformMatrix4fv(colorShaderMVPLoc, 1, GL_FALSE, mvp);
+	
+	glDrawArrays(GL_LINES, 0, 2);
+	
+	glBindVertexArray(0);
+	glDeleteBuffers(1, &lineVBO);
+	glDeleteVertexArrays(1, &lineVAO);
 }
 
 void SDL3Backend::DrawPixel(int x, int y, int color)
 {
-	SDL_SetRenderDrawColor(renderer, (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, (color >> 24) & 0xFF);
-	SDL_RenderPoint(renderer, x, y);
+	float r = ((color >> 16) & 0xFF) / 255.0f;
+	float g = ((color >> 8) & 0xFF) / 255.0f;
+	float b = (color & 0xFF) / 255.0f;
+	float a = ((color >> 24) & 0xFF) / 255.0f;
+	
+	float pointVerts[] = { static_cast<float>(x), static_cast<float>(y) };
+	
+	GLuint pointVAO, pointVBO;
+	glGenVertexArrays(1, &pointVAO);
+	glGenBuffers(1, &pointVBO);
+	
+	glBindVertexArray(pointVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, pointVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(pointVerts), pointVerts, GL_STREAM_DRAW);
+	
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	
+	glUseProgram(colorShaderProgram);
+	currentEffect = -1;
+	glUniform4f(colorShaderColorLoc, r, g, b, a);
+	
+	float mvp[16] = {
+		2.0f / renderTargetWidth, 0.0f, 0.0f, 0.0f,
+		0.0f, -2.0f / renderTargetHeight, 0.0f, 0.0f,
+		0.0f, 0.0f, -1.0f, 0.0f,
+		-1.0f, 1.0f, 0.0f, 1.0f
+	};
+	glUniformMatrix4fv(colorShaderMVPLoc, 1, GL_FALSE, mvp);
+	
+	glDrawArrays(GL_POINTS, 0, 1);
+	
+	glBindVertexArray(0);
+	glDeleteBuffers(1, &pointVBO);
+	glDeleteVertexArrays(1, &pointVAO);
 }
 
 void SDL3Backend::LoadFont(int id)
@@ -828,7 +1185,7 @@ void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const st
 	TextCacheKey cacheKey{ fontInfo->Handle, modifiedText, color, objectHandle };
 	auto cacheIt = textCache.find(cacheKey);
 	
-	SDL_Texture* texture = nullptr;
+	GLTexture texture;
 	int width = 0;
 	int height = 0;
 	
@@ -842,7 +1199,9 @@ void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const st
 			auto it = textCache.begin();
 			while (it != textCache.end()) {
 				if (it->first.objectHandle == objectHandle) {
-					SDL_DestroyTexture(it->second.texture);
+					if (it->second.texture.textureId != 0) {
+						glDeleteTextures(1, &it->second.texture.textureId);
+					}
 					it = textCache.erase(it);
 				} else {
 					++it;
@@ -856,15 +1215,29 @@ void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const st
 			return;
 		}
 
-		texture = SDL_CreateTextureFromSurface(renderer, surface);
-		if (texture == nullptr) {
-			std::cerr << "SDL_CreateTextureFromSurface Error: " << SDL_GetError() << std::endl;
-			SDL_DestroySurface(surface);
+		SDL_Surface* rgbaSurface = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
+		SDL_DestroySurface(surface);
+		if (rgbaSurface == nullptr) {
+			std::cerr << "SDL_ConvertSurface Error: " << SDL_GetError() << std::endl;
 			return;
 		}
 
-		width = surface->w;
-		height = surface->h;
+		glGenTextures(1, &texture.textureId);
+		glBindTexture(GL_TEXTURE_2D, texture.textureId);
+		
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgbaSurface->w, rgbaSurface->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgbaSurface->pixels);
+		
+		texture.width = rgbaSurface->w;
+		texture.height = rgbaSurface->h;
+		width = rgbaSurface->w;
+		height = rgbaSurface->h;
+		
+		SDL_DestroySurface(rgbaSurface);
 		
 		if (textCache.size() >= 256) {
 			RemoveOldTextCache();
@@ -876,12 +1249,16 @@ void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const st
 		cached.width = width;
 		cached.height = height;
 		textCache[cacheKey] = cached;
-		
-		SDL_DestroySurface(surface);
 	}
 
-	SDL_FRect rect = { static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height) };
-	SDL_RenderTexture(renderer, texture, nullptr, &rect);
+	UseEffectShader(0);
+	EffectShader& shader = effectShaders[0];
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture.textureId);
+	glUniform1i(shader.texLoc, 0);
+	glUniform4f(shader.colorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+	
+	RenderQuad(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height));
 }
 
 void SDL3Backend::RemoveOldTextCache()
@@ -891,7 +1268,9 @@ void SDL3Backend::RemoveOldTextCache()
 	}
 
 	auto oldestIt = textCache.begin();
-	SDL_DestroyTexture(oldestIt->second.texture);
+	if (oldestIt->second.texture.textureId != 0) {
+		glDeleteTextures(1, &oldestIt->second.texture.textureId);
+	}
 	textCache.erase(oldestIt);
 }
 
@@ -900,7 +1279,9 @@ void SDL3Backend::ClearTextCacheForFont(int fontHandle)
 	auto it = textCache.begin();
 	while (it != textCache.end()) {
 		if (it->first.fontHandle == fontHandle) {
-			SDL_DestroyTexture(it->second.texture);
+			if (it->second.texture.textureId != 0) {
+				glDeleteTextures(1, &it->second.texture.textureId);
+			}
 			it = textCache.erase(it);
 		} else {
 			++it;
@@ -1745,20 +2126,5 @@ float SDL3Backend::GetTimeDelta()
 void SDL3Backend::Delay(unsigned int ms)
 {
 	SDL_Delay(ms);
-}
-
-void SDL3Backend::GetTextureDimensions(int textureId, int& width, int& height)
-{
-	auto imageInfo = ImageBank::Instance().GetImage(textureId);
-	if (imageInfo)
-	{
-		width = imageInfo->Width;
-		height = imageInfo->Height;
-	}
-	else
-	{
-		width = 0;
-		height = 0;
-	}
 }
 #endif

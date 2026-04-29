@@ -15,11 +15,11 @@ public class PakBuilder
 		var mfaData = mfaReader.getMfaData();
 
 		//images
-		for (int i = 0; i < TextureSheetBuilder.TextureSheets.Count; i++)
+		foreach (var image in gameData.Images.Items.Values)
 		{
-			var entry = new PakEntry { Path = $"images/m{i:D5}.png" };
+			var entry = new PakEntry { Path = $"images/{image.Handle}.png" };
 			using var imageStream = new MemoryStream();
-			TextureSheetBuilder.TextureSheets[i].Save(imageStream, System.Drawing.Imaging.ImageFormat.Png);
+			image.bitmap.Save(imageStream, System.Drawing.Imaging.ImageFormat.Png);
 			entry.Size = (uint)imageStream.Length;
 			entry.Data = imageStream.ToArray();
 			entries.Add(entry);
@@ -79,6 +79,20 @@ public class PakBuilder
 					entry.Size = (uint)entry.Data.Length;
 					entries.Add(entry);
 				}
+			}
+		}
+
+		//shaders
+		var shaderFolder = new DirectoryInfo(Path.Combine(outputPath.FullName, "shaders"));
+		if (shaderFolder.Exists)
+		{
+			foreach (var shaderFile in shaderFolder.GetFiles("*", SearchOption.AllDirectories))
+			{
+				var relativePath = Path.GetRelativePath(shaderFolder.FullName, shaderFile.FullName).Replace('\\', '/');
+				var entry = new PakEntry { Path = $"shaders/{relativePath}" };
+				entry.Data = File.ReadAllBytes(shaderFile.FullName);
+				entry.Size = (uint)entry.Data.Length;
+				entries.Add(entry);
 			}
 		}
 

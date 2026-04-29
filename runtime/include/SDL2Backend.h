@@ -83,7 +83,6 @@ public:
 	unsigned int GetTicks() override { return SDL_GetTicks(); }
 	float GetTimeDelta() override;
 	void Delay(unsigned int ms) override;
-	void GetTextureDimensions(int textureId, int& width, int& height) override;
 
 #ifdef _DEBUG
 	void ToggleDebugUI() { DEBUG_UI.ToggleEnabled(); }

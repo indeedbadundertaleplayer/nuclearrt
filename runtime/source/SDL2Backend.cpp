@@ -893,19 +893,4 @@ void SDL2Backend::Delay(unsigned int ms)
 {
     SDL_Delay(ms);
 }
-
-void SDL2Backend::GetTextureDimensions(int textureId, int& width, int& height)
-{
-    auto it = textures.find(textureId);
-    if (it != textures.end())
-    {
-        SDL_QueryTexture(it->second, nullptr, nullptr, &width, &height);
-    }
-    else
-    {
-        width = 0;
-        height = 0;
-    }
-}
-
 #endif

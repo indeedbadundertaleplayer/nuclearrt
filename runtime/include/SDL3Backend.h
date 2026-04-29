@@ -10,9 +10,22 @@
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
+#if defined(PLATFORM_MACOS)
+#include <OpenGL/gl3.h>
+#else
+#include <GL/glew.h>
+#endif
+
 #ifdef _DEBUG
 #include "DebugUI.h"
 #endif
+
+struct GLTexture {
+	GLuint textureId = 0;
+	int width = 0;
+	int height = 0;
+};
+
 typedef struct SampleFile {
 	Uint8 *data = nullptr;
 	Uint32 data_len = 0;
@@ -120,30 +133,55 @@ public:
 	float GetTimeDelta() override;
 	void Delay(unsigned int ms) override;
 
-	void GetTextureDimensions(int textureId, int& width, int& height) override;
-
 #ifdef _DEBUG
 	void ToggleDebugUI() { DEBUG_UI.ToggleEnabled(); }
 	bool IsDebugUIEnabled() { return DEBUG_UI.IsEnabled(); }
 #endif
 
 private:
-	SDL_Window* window;
-	SDL_Renderer* renderer;
-	SDL_GPUDevice* gpuDevice;
-	SDL_Texture* renderTarget;
+	SDL_Window* window = nullptr;
+	SDL_GLContext glContext = nullptr;
 	static SDL_AudioDeviceID audio_device;
 	SDL_AudioSpec spec;
 	bool renderedFirstFrame = false;
 	float mainVol = 100.0f;
 	float mainPan = 0.0f;
+	
+	GLuint quadVAO = 0;
+	GLuint quadVBO = 0;
+	GLuint renderTarget = 0;
+	GLuint renderTargetTexture = 0;
+	int renderTargetWidth = 0;
+	int renderTargetHeight = 0;
+	
+	static const int STANDARD_EFFECT_COUNT = 13;
+	struct EffectShader {
+		GLuint program = 0;
+		GLint mvpLoc = -1;
+		GLint texLoc = -1;
+		GLint colorLoc = -1;
+	};
+	EffectShader effectShaders[STANDARD_EFFECT_COUNT];
+	int currentEffect = -1;
+	
+	GLuint colorShaderProgram = 0;
+	GLint colorShaderMVPLoc = -1;
+	GLint colorShaderColorLoc = -1;
+	
+	void CreateStandardShaders();
+	void UseEffectShader(int effect);
+	std::string LoadShaderSource(const std::string& filename);
+	GLuint CompileShader(GLenum type, const char* source);
+	GLuint CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc);
+	void CreateRenderTarget(int width, int height);
+	void RenderQuad(float x, float y, float w, float h, float angle = 0.0f, float pivotX = 0.0f, float pivotY = 0.0f, float u0 = 0.0f, float v0 = 0.0f, float u1 = 1.0f, float v1 = 1.0f);
+	void SetOrthoProjection(GLuint program, GLint mvpLoc, float width, float height);
+	
 	SDL_FRect CalculateRenderTargetRect();
 	SDL_Color RGBToSDLColor(int color);
 	SDL_Color RGBAToSDLColor(int color);
 
-	std::unordered_map<int, SDL_Texture*> mosaics;
-	std::unordered_map<int, int> imageToMosaic;
-	std::unordered_map<int, std::set<int>> mosaicToImages;
+	std::unordered_map<int, GLTexture> textures;
 	std::unordered_map<std::string, SampleFile> sampleFiles;
 	Channel channels[49]; // 48 will be the last element.
 	SDL_AudioStream* masterStream;
@@ -173,7 +211,7 @@ private:
 	};
 	
 	struct CachedText {
-		SDL_Texture* texture;
+		GLTexture texture;
 		int width;
 		int height;
 	};

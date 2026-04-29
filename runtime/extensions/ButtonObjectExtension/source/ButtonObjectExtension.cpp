@@ -53,19 +53,19 @@ void ButtonObjectExtension::Draw() {
 }
 
 void ButtonObjectExtension::ButtonDraw() {
-	int borderColor = 0xADADAD;
-	int fillColor = 0xE1E1E1;
+	int borderColor = 0xFFADADAD;
+	int fillColor = 0xFFE1E1E1;
 
 	if (!Enabled) {
-		fillColor = 0xCCCCCC;
-		borderColor = 0xBFBFBF;
+		fillColor = 0xFFCCCCCC;
+		borderColor = 0xFFBFBFBF;
 	}
 	else if (HeldDown) {
-		fillColor = 0xCCE4F7;
-		borderColor = 0x005499;
+		fillColor = 0xFFCCE4F7;
+		borderColor = 0xFF005499;
 	} else if (Hovered) {
-		fillColor = 0xE5F1FB;
-		borderColor = 0x0078D7;
+		fillColor = 0xFFE5F1FB;
+		borderColor = 0xFF0078D7;
 	}
 
 	Application::Instance().GetBackend()->DrawRectangle(X + 1, Y + 1, Width - 2, Height - 2, fillColor);
@@ -76,16 +76,16 @@ void ButtonObjectExtension::CheckboxDraw() {
 	int boxX = X;
 	int boxY = Y;
 
-	int borderColor = 0x626262;
-	int fillColor = 0xFFFFFF;
+	int borderColor = 0xFF626262;
+	int fillColor = 0xFFFFFFFF;
 
 	if (!Enabled) {
-		fillColor = 0xF9F9F9;
-		borderColor = 0xC3C3C3;
+		fillColor = 0xFFF9F9F9;
+		borderColor = 0xFFC3C3C3;
 	}
 	else if (Checked) {
-		fillColor = 0x005FB8;
-		borderColor = 0x005FB8;
+		fillColor = 0xFF005FB8;
+		borderColor = 0xFF005FB8;
 	}
 
 	if (Flags & 4) {
@@ -100,16 +100,16 @@ void ButtonObjectExtension::RadioButtonDraw() {
 	int radioX = X;
 	int radioY = Y;
 
-	int borderColor = 0x626262;
-	int fillColor = 0xFFFFFF;
+	int borderColor = 0xFF626262;
+	int fillColor = 0xFFFFFFFF;
 
 	if (!Enabled) {
-		fillColor = 0xF9F9F9;
-		borderColor = 0xC3C3C3;
+		fillColor = 0xFFF9F9F9;
+		borderColor = 0xFFC3C3C3;
 	}
 	else if (Checked) {
-		fillColor = 0x005FB8;
-		borderColor = 0x005FB8;
+		fillColor = 0xFF005FB8;
+		borderColor = 0xFF005FB8;
 	}
 
 	if (Flags & 4) {

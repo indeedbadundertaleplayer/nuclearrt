@@ -78,7 +78,6 @@ public:
 	virtual uint32_t GetMouseState() { return 0; }
 	virtual void HideMouseCursor() {}
 	virtual void ShowMouseCursor() {}
-	virtual void GetTextureDimensions(int textureId, int& width, int& height) { width = 0; height = 0; }
 
 	//Pak file stuff, maybe move to application class? - shish
 	virtual bool PakFileEntryExists(std::string entry) { return pakFile.Exists(entry); }
