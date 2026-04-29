@@ -373,6 +373,11 @@ void SDL3Backend::Deinitialize()
 		glDeleteProgram(colorShaderProgram);
 		colorShaderProgram = 0;
 	}
+
+	if (gradientShaderProgram != 0) {
+		glDeleteProgram(gradientShaderProgram);
+		gradientShaderProgram = 0;
+	}
 	
 	if (glContext != nullptr) {
 		SDL_GL_DestroyContext(glContext);
@@ -635,6 +640,23 @@ void SDL3Backend::CreateStandardShaders() {
 	
 	colorShaderMVPLoc = glGetUniformLocation(colorShaderProgram, "uMVP");
 	colorShaderColorLoc = glGetUniformLocation(colorShaderProgram, "uColor");
+
+	std::string gradientFragSrc = LoadShaderSource("shaders/standard/gradient.frag");
+	if (gradientFragSrc.empty()) {
+		std::cerr << "Failed to load gradient shader" << std::endl;
+		return;
+	}
+
+	gradientShaderProgram = CreateShaderProgram(vertexSrc.c_str(), gradientFragSrc.c_str());
+	if (gradientShaderProgram == 0) {
+		std::cerr << "Failed to create gradient shader program" << std::endl;
+		return;
+	}
+
+	gradientShaderMVPLoc = glGetUniformLocation(gradientShaderProgram, "uMVP");
+	gradientShaderColor1Loc = glGetUniformLocation(gradientShaderProgram, "uColor1");
+	gradientShaderColor2Loc = glGetUniformLocation(gradientShaderProgram, "uColor2");
+	gradientShaderVerticalLoc = glGetUniformLocation(gradientShaderProgram, "uVertical");
 }
 
 void SDL3Backend::UseEffectShader(int effect) {
@@ -730,6 +752,8 @@ void SDL3Backend::RenderQuad(float x, float y, float w, float h, float angle, fl
 		mvpLoc = effectShaders[currentEffect].mvpLoc;
 	} else if (static_cast<GLuint>(currentProgram) == colorShaderProgram) {
 		mvpLoc = colorShaderMVPLoc;
+	} else if (static_cast<GLuint>(currentProgram) == gradientShaderProgram) {
+		mvpLoc = gradientShaderMVPLoc;
 	}
 	
 	if (mvpLoc != -1) {
@@ -903,32 +927,13 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 			float r2 = ((shape->Color2 >> 16) & 0xFF) / 255.0f;
 			float g2 = ((shape->Color2 >> 8) & 0xFF) / 255.0f;
 			float b2 = (shape->Color2 & 0xFF) / 255.0f;
-			
-			if (!shape->VerticalGradient) {
-				// Vertical gradient (top to bottom)
-				for (int i = 0; i < height; i++) {
-					float ratio = static_cast<float>(i) / static_cast<float>(height);
-					
-					float r = r1 + (r2 - r1) * ratio;
-					float g = g1 + (g2 - g1) * ratio;
-					float b = b1 + (b2 - b1) * ratio;
-					
-					int lineColor = (static_cast<int>(r * 255) << 16) | (static_cast<int>(g * 255) << 8) | static_cast<int>(b * 255) | 0xFF000000;
-					DrawLine(x, y + i, x + width - 1, y + i, lineColor);
-				}
-			} else {
-				// Horizontal gradient (left to right)
-				for (int i = 0; i < width; i++) {
-					float ratio = static_cast<float>(i) / static_cast<float>(width);
 
-					float r = r1 + (r2 - r1) * ratio;
-					float g = g1 + (g2 - g1) * ratio;
-					float b = b1 + (b2 - b1) * ratio;
-
-					int lineColor = (static_cast<int>(r * 255) << 16) | (static_cast<int>(g * 255) << 8) | static_cast<int>(b * 255) | 0xFF000000;
-					DrawLine(x + i, y, x + i, y + height - 1, lineColor);
-				}
-			}
+			glUseProgram(gradientShaderProgram);
+			currentEffect = -1;
+			glUniform4f(gradientShaderColor1Loc, r1, g1, b1, 1.0f);
+			glUniform4f(gradientShaderColor2Loc, r2, g2, b2, 1.0f);
+			glUniform1i(gradientShaderVerticalLoc, shape->VerticalGradient ? 1 : 0);
+			RenderQuad(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height));
 		}
 		else if (shape->FillType == 3) { // Motif 
 			auto texIt = textures.find(shape->Image);

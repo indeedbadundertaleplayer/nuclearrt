@@ -167,6 +167,12 @@ private:
 	GLuint colorShaderProgram = 0;
 	GLint colorShaderMVPLoc = -1;
 	GLint colorShaderColorLoc = -1;
+
+	GLuint gradientShaderProgram = 0;
+	GLint gradientShaderMVPLoc = -1;
+	GLint gradientShaderColor1Loc = -1;
+	GLint gradientShaderColor2Loc = -1;
+	GLint gradientShaderVerticalLoc = -1;
 	
 	void CreateStandardShaders();
 	void UseEffectShader(int effect);
