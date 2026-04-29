@@ -508,6 +508,17 @@ void SDL3Backend::EndDrawing()
 		2.0f * rect.x / windowWidth - 1.0f, -(2.0f * rect.y / windowHeight - 1.0f) - 2.0f * rect.h / windowHeight, 0.0f, 1.0f
 	};
 	glUniformMatrix4fv(shader.mvpLoc, 1, GL_FALSE, mvp);
+
+	float presentVerts[] = {
+		0.0f, 0.0f, 0.0f, 0.0f,
+		1.0f, 0.0f, 1.0f, 0.0f,
+		1.0f, 1.0f, 1.0f, 1.0f,
+		0.0f, 0.0f, 0.0f, 0.0f,
+		1.0f, 1.0f, 1.0f, 1.0f,
+		0.0f, 1.0f, 0.0f, 1.0f
+	};
+	glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(presentVerts), presentVerts);
 	
 	glBindVertexArray(quadVAO);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
