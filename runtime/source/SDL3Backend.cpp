@@ -590,7 +590,7 @@ void SDL3Backend::CreateStandardShaders() {
 	// guh
 	const char* effectFiles[STANDARD_EFFECT_COUNT] = {
 		"shaders/standard/normal.frag",
-		"shaders/standard/semitransparent.frag",
+		nullptr,
 		"shaders/standard/inverted.frag",
 		nullptr,
 		nullptr,
@@ -862,15 +862,17 @@ void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, in
 	float g = ((color >> 8) & 0xFF) / 255.0f;
 	float b = (color & 0xFF) / 255.0f;
 	float a = (255 - effectParameter) / 255.0f;
-	
+
+	// semitransparent doesn't have rgb coeff
+	if (effect == 1) {
+		r = 1.0f;
+		g = 1.0f;
+		b = 1.0f;
+	}
 
 	bool needsBlendRestore = false;
 	
-	if (effect == 1) { // Semi-Transparent
-		glBlendFuncSeparate(GL_ONE_MINUS_DST_COLOR, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-		needsBlendRestore = true;
-	}
-	else if (effect == 9) // Add
+	if (effect == 9) // Add
 	{
 		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ONE, GL_ONE);
 		needsBlendRestore = true;
