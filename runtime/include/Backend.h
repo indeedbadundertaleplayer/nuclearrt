@@ -8,6 +8,7 @@
 #include "Shape.h"
 #include "PakFile.h"
 #include "EffectInstance.h"
+#include "Bitmap.h"
 
 class Backend {
 public:
@@ -36,11 +37,7 @@ public:
 	virtual void UnloadTexture(int id) {}
 	virtual void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter, EffectInstance* effectInstance = nullptr) {}
 	virtual void DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape) {}
-
-	virtual void DrawRectangle(int x, int y, int width, int height, int color) {}
-	virtual void DrawRectangleLines(int x, int y, int width, int height, int color) {}
-	virtual void DrawLine(int x1, int y1, int x2, int y2, int color) {}
-	virtual void DrawPixel(int x, int y, int color) {}
+	virtual void DrawBitmap(Bitmap& bitmap, int x, int y) {}
 
 	virtual void LoadFont(int id) {}
 	virtual void UnloadFont(int id) {}

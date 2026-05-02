@@ -252,35 +252,6 @@ void SDL3Backend::Initialize() {
 						ImGui::TreePop();
 					}
 
-					if (ImGui::IsItemHovered()) {
-						if (instance->Type != 0 && instance->Type != 1 && instance->Type != 2) {
-							DrawRectangle(instance->X, instance->Y, 32, 32, 0xFFFF0000);
-						}
-						else {
-							unsigned int imageId = 0;
-							if (instance->Type == 1) // Backdrop
-							{
-								imageId = ((Backdrop*)instance)->Image;
-							}
-							else if (instance->Type == 0) // Quick backdrop
-							{
-								imageId = ((QuickBackdrop*)instance)->shape.Image;
-							}
-							else {
-								imageId = ((Active*)instance)->animations.GetCurrentImageHandle();
-							}
-							auto imageInfo = ImageBank::Instance().GetImage(imageId);
-
-							if (imageInfo) {
-								DrawRectangle(instance->X, instance->Y, imageInfo->Width, imageInfo->Height, 0xFFFF0000);
-							}
-							else {
-								DrawRectangle(instance->X, instance->Y, 32, 32, 0xFFFF0000);
-							}
-
-						}
-					}
-						// 
 					i++;
 				}
 				ImGui::TreePop();
@@ -1018,17 +989,23 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 	//TODO: Borders
 	//TODO: Ellipse masks
 	if (shape->ShapeType == 1) { // Line
-		int x1 = shape->FlipX ? x + width : x;
-		int y1 = shape->FlipY ? y + height : y;
-		int x2 = shape->FlipX ? x : x + width;
-		int y2 = shape->FlipY ? y : y + height;
+		int x1 = shape->FlipX ? width - 1 : 0;
+		int y1 = shape->FlipY ? height - 1 : 0;
+		int x2 = shape->FlipX ? 0 : width - 1;
+		int y2 = shape->FlipY ? 0 : height - 1;
 
-		//TODO: BorderSize
-		DrawLine(x1, y1, x2, y2, shape->BorderColor | 0xFF000000);
+		//Windows DX9 runtime doesn't support border width to my knowledge
+		Bitmap line(width, height);
+		line.Clear(0);
+		line.DrawLine(x1, y1, x2, y2, shape->BorderColor | 0xFF000000);
+		DrawBitmap(line, x, y);
 	}
 	else {
 		if (shape->FillType == 1) { // Solid Color
-			DrawRectangle(x, y, width, height, shape->Color1 | 0xFF000000);
+			glUseProgram(colorShaderProgram);
+			currentEffect = -1;
+			glUniform4f(colorShaderColorLoc, ((shape->Color1 >> 16) & 0xFF) / 255.0f, ((shape->Color1 >> 8) & 0xFF) / 255.0f, (shape->Color1 & 0xFF) / 255.0f, 1.0f);
+			RenderQuad(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height));
 		}
 		else if (shape->FillType == 2) { // Gradient
 			float r1 = ((shape->Color1 >> 16) & 0xFF) / 255.0f;
@@ -1075,110 +1052,31 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 	}
 }
 
-void SDL3Backend::DrawRectangle(int x, int y, int width, int height, int color)
+void SDL3Backend::DrawBitmap(Bitmap& bitmap, int x, int y)
 {
-	float r = ((color >> 16) & 0xFF) / 255.0f;
-	float g = ((color >> 8) & 0xFF) / 255.0f;
-	float b = (color & 0xFF) / 255.0f;
-	float a = ((color >> 24) & 0xFF) / 255.0f;
+	if (bitmap.GetWidth() <= 0 || bitmap.GetHeight() <= 0) {
+		return;
+	}
 	
-	glUseProgram(colorShaderProgram);
-	currentEffect = -1;
-	glUniform4f(colorShaderColorLoc, r, g, b, a);
-	
-	RenderQuad(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height));
-}
+	GLuint tempTexture = 0;
+	glGenTextures(1, &tempTexture);
+	glBindTexture(GL_TEXTURE_2D, tempTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, bitmap.GetWidth(), bitmap.GetHeight(), 0, GL_BGRA, GL_UNSIGNED_BYTE, bitmap.GetData());
 
-void SDL3Backend::DrawRectangleLines(int x, int y, int width, int height, int color)
-{
-	DrawLine(x, y, x + width - 1, y, color);
-	DrawLine(x + width - 1, y, x + width - 1, y + height - 1, color);
-	DrawLine(x + width - 1, y + height - 1, x, y + height - 1, color);
-	DrawLine(x, y + height - 1, x, y, color);
-}
+	UseEffectShader(0);
+	EffectShader& shader = effectShaders[0];
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, tempTexture);
+	glUniform1i(shader.texLoc, 0);
+	glUniform4f(shader.colorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
 
-void SDL3Backend::DrawLine(int x1, int y1, int x2, int y2, int color)
-{
-	float r = ((color >> 16) & 0xFF) / 255.0f;
-	float g = ((color >> 8) & 0xFF) / 255.0f;
-	float b = (color & 0xFF) / 255.0f;
-	float a = ((color >> 24) & 0xFF) / 255.0f;
-	
-	float lineVerts[] = {
-		static_cast<float>(x1), static_cast<float>(y1),
-		static_cast<float>(x2), static_cast<float>(y2)
-	};
-	
-	// create tmp vao/vbo
-	GLuint lineVAO, lineVBO;
-	glGenVertexArrays(1, &lineVAO);
-	glGenBuffers(1, &lineVBO);
-	
-	glBindVertexArray(lineVAO);
-	glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(lineVerts), lineVerts, GL_STREAM_DRAW);
-	
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
-	
-	glUseProgram(colorShaderProgram);
-	currentEffect = -1;
-	glUniform4f(colorShaderColorLoc, r, g, b, a);
-	
-	float mvp[16] = {
-		2.0f / renderTargetWidth, 0.0f, 0.0f, 0.0f,
-		0.0f, -2.0f / renderTargetHeight, 0.0f, 0.0f,
-		0.0f, 0.0f, -1.0f, 0.0f,
-		-1.0f, 1.0f, 0.0f, 1.0f
-	};
-	glUniformMatrix4fv(colorShaderMVPLoc, 1, GL_FALSE, mvp);
-	
-	glDrawArrays(GL_LINES, 0, 2);
-	
-	glBindVertexArray(0);
-	glDeleteBuffers(1, &lineVBO);
-	glDeleteVertexArrays(1, &lineVAO);
+	RenderQuad(static_cast<float>(x), static_cast<float>(y), static_cast<float>(bitmap.GetWidth()), static_cast<float>(bitmap.GetHeight()), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f);
+	glDeleteTextures(1, &tempTexture);
 }
-
-void SDL3Backend::DrawPixel(int x, int y, int color)
-{
-	float r = ((color >> 16) & 0xFF) / 255.0f;
-	float g = ((color >> 8) & 0xFF) / 255.0f;
-	float b = (color & 0xFF) / 255.0f;
-	float a = ((color >> 24) & 0xFF) / 255.0f;
-	
-	float pointVerts[] = { static_cast<float>(x), static_cast<float>(y) };
-	
-	GLuint pointVAO, pointVBO;
-	glGenVertexArrays(1, &pointVAO);
-	glGenBuffers(1, &pointVBO);
-	
-	glBindVertexArray(pointVAO);
-	glBindBuffer(GL_ARRAY_BUFFER, pointVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(pointVerts), pointVerts, GL_STREAM_DRAW);
-	
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
-	
-	glUseProgram(colorShaderProgram);
-	currentEffect = -1;
-	glUniform4f(colorShaderColorLoc, r, g, b, a);
-	
-	float mvp[16] = {
-		2.0f / renderTargetWidth, 0.0f, 0.0f, 0.0f,
-		0.0f, -2.0f / renderTargetHeight, 0.0f, 0.0f,
-		0.0f, 0.0f, -1.0f, 0.0f,
-		-1.0f, 1.0f, 0.0f, 1.0f
-	};
-	glUniformMatrix4fv(colorShaderMVPLoc, 1, GL_FALSE, mvp);
-	
-	glDrawArrays(GL_POINTS, 0, 1);
-	
-	glBindVertexArray(0);
-	glDeleteBuffers(1, &pointVBO);
-	glDeleteVertexArrays(1, &pointVAO);
-}
-
 
 void SDL3Backend::DrawEffectRect(int x, int y, int width, int height, int rgbCoefficient, unsigned char effectParameter, EffectInstance* effectInstance)
 {

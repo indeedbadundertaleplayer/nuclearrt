@@ -81,11 +81,7 @@ public:
 	void UnloadTexture(int id) override;
 	void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter, EffectInstance* effectInstance = nullptr) override;
 	void DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape) override;
-	
-	void DrawRectangle(int x, int y, int width, int height, int color) override;
-	void DrawRectangleLines(int x, int y, int width, int height, int color) override;
-	void DrawLine(int x1, int y1, int x2, int y2, int color) override;
-	void DrawPixel(int x, int y, int color) override;
+	void DrawBitmap(Bitmap& bitmap, int x, int y) override;
 	void DrawEffectRect(int x, int y, int width, int height, int rgbCoefficient, unsigned char effectParameter, EffectInstance* effectInstance);
 
 	void LoadFont(int id) override;
