@@ -105,6 +105,7 @@ public class PakBuilder
 			entry.Size = (uint)entry.Data.Length;
 			entries.Add(entry);
 		}
+		Directory.Delete(Path.Combine(outputPath.FullName, "shaders"), true);
 
 		//clear any duplicates
 		entries = entries.DistinctBy(e => e.Path).ToList();
