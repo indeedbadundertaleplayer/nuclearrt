@@ -89,6 +89,9 @@ public class ObjectInfoExporter : BaseExporter
 						}
 					}
 				}
+				else {
+					result.AppendLine($"// Identifier {common.Identifier}");
+				}
 			}
 		}
 
@@ -107,8 +110,8 @@ public class ObjectInfoExporter : BaseExporter
 				string value = "";
 				switch (parameter.Type)
 				{
-					case 0: //bool
-						value = $"static_cast<bool>({BitConverter.ToBoolean(objectInfo.shaderData.parameters[i].Value as byte[], 0)})";
+					case 0: //int, also used as bool
+						value = $"static_cast<int>({BitConverter.ToInt32(objectInfo.shaderData.parameters[i].Value as byte[], 0)})";
 						break;
 					case 1:
 						//read float from bytes

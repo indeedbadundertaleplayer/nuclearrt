@@ -26,6 +26,13 @@ struct GLTexture {
 	int height = 0;
 };
 
+struct EffectShader {
+	GLuint program = 0;
+	GLint mvpLoc = -1;
+	GLint texLoc = -1;
+	GLint colorLoc = -1;
+};
+
 typedef struct SampleFile {
 	Uint8 *data = nullptr;
 	Uint32 data_len = 0;
@@ -67,6 +74,9 @@ public:
 	void EndDrawing() override;
 	void Clear(int color) override;
 
+	EffectShader* LoadShader(const std::string& hash);
+	EffectShader* LoadShader(const std::string& name, const std::string& data);
+
 	void LoadTexture(int id) override;
 	void UnloadTexture(int id) override;
 	void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter, EffectInstance* effectInstance = nullptr) override;
@@ -76,6 +86,7 @@ public:
 	void DrawRectangleLines(int x, int y, int width, int height, int color) override;
 	void DrawLine(int x1, int y1, int x2, int y2, int color) override;
 	void DrawPixel(int x, int y, int color) override;
+	void DrawEffectRect(int x, int y, int width, int height, int rgbCoefficient, unsigned char effectParameter, EffectInstance* effectInstance);
 
 	void LoadFont(int id) override;
 	void UnloadFont(int id) override;
@@ -155,12 +166,6 @@ private:
 	int renderTargetHeight = 0;
 	
 	static const int STANDARD_EFFECT_COUNT = 13;
-	struct EffectShader {
-		GLuint program = 0;
-		GLint mvpLoc = -1;
-		GLint texLoc = -1;
-		GLint colorLoc = -1;
-	};
 	EffectShader effectShaders[STANDARD_EFFECT_COUNT];
 	int currentEffect = -1;
 	
@@ -178,7 +183,6 @@ private:
 	
 	void CreateStandardShaders();
 	void UseEffectShader(int effect);
-	EffectShader* GetOrLoadThirdPartyShader(const std::string& hash);
 	std::string LoadShaderSource(const std::string& filename);
 	GLuint CompileShader(GLenum type, const char* source);
 	GLuint CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc);
