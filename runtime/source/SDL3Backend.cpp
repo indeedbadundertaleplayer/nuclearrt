@@ -345,6 +345,11 @@ void SDL3Backend::Deinitialize()
 		colorShaderProgram = 0;
 	}
 
+	if (textureQuickbackdropShaderProgram != 0) {
+		glDeleteProgram(textureQuickbackdropShaderProgram);
+		textureQuickbackdropShaderProgram = 0;
+	}
+
 	if (gradientShaderProgram != 0) {
 		glDeleteProgram(gradientShaderProgram);
 		gradientShaderProgram = 0;
@@ -629,6 +634,24 @@ void SDL3Backend::CreateStandardShaders() {
 	
 	colorShaderMVPLoc = glGetUniformLocation(colorShaderProgram, "uMVP");
 	colorShaderColorLoc = glGetUniformLocation(colorShaderProgram, "uColor");
+	colorShaderCircleClipLoc = glGetUniformLocation(colorShaderProgram, "circleClip");
+
+	std::string textureQuickbackdropFragSrc = LoadShaderSource("shaders/standard/normal_quickbackdrop.frag");
+	if (textureQuickbackdropFragSrc.empty()) {
+		std::cerr << "Failed to load textured quick backdrop shader" << std::endl;
+		return;
+	}
+	
+	textureQuickbackdropShaderProgram = CreateShaderProgram(vertexSrc.c_str(), textureQuickbackdropFragSrc.c_str());
+	if (textureQuickbackdropShaderProgram == 0) {
+		std::cerr << "Failed to create textured quick backdrop shader program" << std::endl;
+		return;
+	}
+	textureQuickbackdropShaderMVPLoc = glGetUniformLocation(textureQuickbackdropShaderProgram, "uMVP");
+	textureQuickbackdropShaderTextureLoc = glGetUniformLocation(textureQuickbackdropShaderProgram, "uTexture");
+	textureQuickbackdropShaderColorLoc = glGetUniformLocation(textureQuickbackdropShaderProgram, "uColor");
+	textureQuickbackdropShaderCircleClipLoc = glGetUniformLocation(textureQuickbackdropShaderProgram, "circleClip");
+	textureQuickbackdropShaderTileScaleLoc = glGetUniformLocation(textureQuickbackdropShaderProgram, "uTileScale");
 
 	std::string gradientFragSrc = LoadShaderSource("shaders/standard/gradient.frag");
 	if (gradientFragSrc.empty()) {
@@ -646,6 +669,7 @@ void SDL3Backend::CreateStandardShaders() {
 	gradientShaderColor1Loc = glGetUniformLocation(gradientShaderProgram, "uColor1");
 	gradientShaderColor2Loc = glGetUniformLocation(gradientShaderProgram, "uColor2");
 	gradientShaderVerticalLoc = glGetUniformLocation(gradientShaderProgram, "uVertical");
+	gradientShaderCircleClipLoc = glGetUniformLocation(gradientShaderProgram, "circleClip");
 }
 
 void SDL3Backend::UseEffectShader(int effect) {
@@ -741,6 +765,8 @@ void SDL3Backend::RenderQuad(float x, float y, float w, float h, float angle, fl
 		mvpLoc = effectShaders[currentEffect].mvpLoc;
 	} else if (static_cast<GLuint>(currentProgram) == colorShaderProgram) {
 		mvpLoc = colorShaderMVPLoc;
+	} else if (static_cast<GLuint>(currentProgram) == textureQuickbackdropShaderProgram) {
+		mvpLoc = textureQuickbackdropShaderMVPLoc;
 	} else if (static_cast<GLuint>(currentProgram) == gradientShaderProgram) {
 		mvpLoc = gradientShaderMVPLoc;
 	} else {
@@ -986,8 +1012,6 @@ EffectShader* SDL3Backend::LoadShader(const std::string& name, const std::string
 
 void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape)
 {
-	//TODO: Borders
-	//TODO: Ellipse masks
 	if (shape->ShapeType == 1) { // Line
 		int x1 = shape->FlipX ? width - 1 : 0;
 		int y1 = shape->FlipY ? height - 1 : 0;
@@ -996,7 +1020,6 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 
 		//Windows DX9 runtime doesn't support border width to my knowledge
 		Bitmap line(width, height);
-		line.Clear(0);
 		line.DrawLine(x1, y1, x2, y2, shape->BorderColor | 0xFF000000);
 		DrawBitmap(line, x, y);
 	}
@@ -1005,6 +1028,7 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 			glUseProgram(colorShaderProgram);
 			currentEffect = -1;
 			glUniform4f(colorShaderColorLoc, ((shape->Color1 >> 16) & 0xFF) / 255.0f, ((shape->Color1 >> 8) & 0xFF) / 255.0f, (shape->Color1 & 0xFF) / 255.0f, 1.0f);
+			glUniform1i(colorShaderCircleClipLoc, shape->ShapeType == 3);
 			RenderQuad(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height));
 		}
 		else if (shape->FillType == 2) { // Gradient
@@ -1021,6 +1045,7 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 			glUniform4f(gradientShaderColor1Loc, r1, g1, b1, 1.0f);
 			glUniform4f(gradientShaderColor2Loc, r2, g2, b2, 1.0f);
 			glUniform1i(gradientShaderVerticalLoc, shape->VerticalGradient ? 1 : 0);
+			glUniform1i(gradientShaderCircleClipLoc, shape->ShapeType == 3);
 			RenderQuad(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height));
 		}
 		else if (shape->FillType == 3) { // Motif 
@@ -1029,25 +1054,39 @@ void SDL3Backend::DrawQuickBackdrop(int x, int y, int width, int height, Shape* 
 				return;
 			}
 			
-			GLTexture& texture = texIt->second;
-			
-			UseEffectShader(0);
-			EffectShader& shader = effectShaders[0];
+			GLTexture& texture = texIt->second;			
+
+			glUseProgram(textureQuickbackdropShaderProgram);
+			currentEffect = -1;
 			glActiveTexture(GL_TEXTURE0);
 			glBindTexture(GL_TEXTURE_2D, texture.textureId);
-			glUniform1i(shader.texLoc, 0);
-			glUniform4f(shader.colorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
-			
-			// THIS SUCKS
-			for (int tileY = y; tileY < y + height; tileY += texture.height) {
-				for (int tileX = x; tileX < x + width; tileX += texture.width) {
-					int tileW = std::min(texture.width, x + width - tileX);
-					int tileH = std::min(texture.height, y + height - tileY);
-					float u1 = static_cast<float>(tileW) / static_cast<float>(texture.width);
-					float v1 = static_cast<float>(tileH) / static_cast<float>(texture.height);
-					RenderQuad(static_cast<float>(tileX), static_cast<float>(tileY), static_cast<float>(tileW), static_cast<float>(tileH), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, u1, v1);
+			glUniform1i(textureQuickbackdropShaderTextureLoc, 0);
+			glUniform4f(textureQuickbackdropShaderColorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+			glUniform1i(textureQuickbackdropShaderCircleClipLoc, shape->ShapeType == 3);
+			int tw = std::max(1, texture.width);
+			int th = std::max(1, texture.height);
+			glUniform2f(textureQuickbackdropShaderTileScaleLoc,
+				static_cast<float>(width) / static_cast<float>(tw),
+				static_cast<float>(height) / static_cast<float>(th));
+			RenderQuad(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height));
+		}
+
+		if (shape->BorderSize > 0) {
+			Bitmap border(width, height);
+			for (int i = 0; i < shape->BorderSize; i++) {
+				int innerW = width - i * 2;
+				int innerH = height - i * 2;
+				if (innerW <= 0 || innerH <= 0) {
+					break;
+				}
+				if (shape->ShapeType == 2) {
+					border.DrawRectangleLines(i, i, innerW, innerH, shape->BorderColor | 0xFF000000);
+				}
+				else if (shape->ShapeType == 3 && shape->FillType > 1) { // On Windows DX9, only draw ellipse lines if the fill type is a gradient or motif
+					border.DrawEllipseLines(i, i, innerW, innerH, shape->BorderColor | 0xFF000000);
 				}
 			}
+			DrawBitmap(border, x, y);
 		}
 	}
 }

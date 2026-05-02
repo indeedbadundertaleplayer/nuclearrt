@@ -3,6 +3,9 @@
 #include <vector>
 #include <cstring>
 #include <cstdint>
+#include <algorithm>
+#include <cstdlib>
+#include <cmath>
 
 class Bitmap {
 public:
@@ -32,6 +35,10 @@ public:
         int dx = x2 - x1;
         int dy = y2 - y1;
         int steps = std::max(abs(dx), abs(dy));
+        if (steps == 0) {
+            SetPixel(x1, y1, color);
+            return;
+        }
         float xIncrement = dx / (float)steps;
         float yIncrement = dy / (float)steps;
         float x = (float)x1;
@@ -56,6 +63,46 @@ public:
         DrawLine(x + width - 1, y, x + width - 1, y + height - 1, color);
         DrawLine(x + width - 1, y + height - 1, x, y + height - 1, color);
         DrawLine(x, y + height - 1, x, y, color);
+    }
+
+    void DrawEllipseLines(int x, int y, int width, int height, int color) {
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+        if (width == 1) {
+            DrawLine(x, y, x, y + height - 1, color);
+            return;
+        }
+        if (height == 1) {
+            DrawLine(x, y, x + width - 1, y, color);
+            return;
+        }
+
+        const double cx = x + (width - 1) * 0.5;
+        const double cy = y + (height - 1) * 0.5;
+        const double rx = (width - 1) * 0.5;
+        const double ry = (height - 1) * 0.5;
+
+        if (rx <= 0.0 || ry <= 0.0) {
+            DrawRectangleLines(x, y, width, height, color);
+            return;
+        }
+
+        const int steps = std::max(48, (width + height) * 4);
+        int lx = 0;
+        int ly = 0;
+        bool hasLast = false;
+        for (int i = 0; i <= steps; i++) {
+            double t = (i * 2.0 * 3.14159265358979323846) / steps;
+            int px = static_cast<int>(std::lround(cx + rx * std::cos(t)));
+            int py = static_cast<int>(std::lround(cy + ry * std::sin(t)));
+            if (hasLast) {
+                DrawLine(lx, ly, px, py, color);
+            }
+            lx = px;
+            ly = py;
+            hasLast = true;
+        }
     }
 
     int GetWidth() const { return width; }

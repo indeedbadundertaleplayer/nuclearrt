@@ -168,12 +168,21 @@ private:
 	GLuint colorShaderProgram = 0;
 	GLint colorShaderMVPLoc = -1;
 	GLint colorShaderColorLoc = -1;
+	GLint colorShaderCircleClipLoc = -1;
+
+	GLuint textureQuickbackdropShaderProgram = 0;
+	GLint textureQuickbackdropShaderMVPLoc = -1;
+	GLint textureQuickbackdropShaderColorLoc = -1;
+	GLint textureQuickbackdropShaderTextureLoc = -1;
+	GLint textureQuickbackdropShaderCircleClipLoc = -1;
+	GLint textureQuickbackdropShaderTileScaleLoc = -1;
 
 	GLuint gradientShaderProgram = 0;
 	GLint gradientShaderMVPLoc = -1;
 	GLint gradientShaderColor1Loc = -1;
 	GLint gradientShaderColor2Loc = -1;
 	GLint gradientShaderVerticalLoc = -1;
+	GLint gradientShaderCircleClipLoc = -1;
 
 	std::unordered_map<std::string, EffectShader> thirdPartyShaders;
 	
