@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using CTFAK.CCN.Chunks.Objects;
 using CTFAK.MFA.MFAObjectLoaders;
@@ -115,8 +116,8 @@ public class ObjectInfoExporter : BaseExporter
 						break;
 					case 1:
 						//read float from bytes
-						value = $"static_cast<float>({(float)BitConverter.ToSingle(objectInfo.shaderData.parameters[i].Value as byte[], 0)}";
-						if (!value.Contains(".")) value += ".0";
+						value = $"static_cast<float>({((float)BitConverter.ToSingle(objectInfo.shaderData.parameters[i].Value as byte[], 0)).ToString(CultureInfo.InvariantCulture)}";
+						if (!value.Contains('.')) value += ".0";
 						value += "f)";
 						break;
 					case 2: //color
