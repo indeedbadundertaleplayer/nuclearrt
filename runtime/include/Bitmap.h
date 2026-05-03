@@ -115,8 +115,6 @@ private:
     int height;
 
     void Init(int width, int height) {
-        if (this->width == width && this->height == height) return;
-
         this->width = width;
         this->height = height;
         data.resize(width * height);
