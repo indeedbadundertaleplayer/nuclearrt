@@ -167,6 +167,11 @@ public class ObjectInfoExporter : BaseExporter
 			}
 		}
 
+		if (objectInfo.ObjectType >= 2)
+		{
+			var common = (ObjectCommon)objectInfo.properties;
+			if (objectTypeClass != "ObjectInstance") result.AppendLine($"(({objectTypeClass}*)instance)->Visible = {common.NewFlags.GetFlag("VisibleAtStart").ToString().ToLower()};");
+		}
 
 		if (objectInfo.ObjectType == 0)
 		{
@@ -179,7 +184,6 @@ public class ObjectInfoExporter : BaseExporter
 		else if (objectInfo.ObjectType == 2)
 		{
 			var common = (ObjectCommon)objectInfo.properties;
-			result.AppendLine($"((Active*)instance)->Visible = {common.NewFlags.GetFlag("VisibleAtStart").ToString().ToLower()};");
 			result.AppendLine($"((Active*)instance)->FollowFrame = {(!common.Flags.GetFlag("ScrollingIndependant")).ToString().ToLower()};");
 			result.AppendLine($"((Active*)instance)->AutomaticRotation = {common.NewFlags.GetFlag("AutomaticRotation").ToString().ToLower()};");
 			result.AppendLine($"((Active*)instance)->FineDetection = {(!common.NewFlags.GetFlag("CollisionBox")).ToString().ToLower()};");
@@ -192,14 +196,12 @@ public class ObjectInfoExporter : BaseExporter
 		else if (objectInfo.ObjectType == 3)
 		{
 			var common = (ObjectCommon)objectInfo.properties;
-			result.AppendLine($"((StringObject*)instance)->Visible = {common.NewFlags.GetFlag("VisibleAtStart").ToString().ToLower()};");
 			result.AppendLine($"((StringObject*)instance)->FollowFrame = {(!common.Flags.GetFlag("ScrollingIndependant")).ToString().ToLower()};");
 			result.AppendLine(BuildParagraphs((ObjectCommon)objectInfo.properties));
 		}
 		else if (objectInfo.ObjectType == 5 || objectInfo.ObjectType == 6 || objectInfo.ObjectType == 7)
 		{
 			var common = (ObjectCommon)objectInfo.properties;
-			result.AppendLine($"((CounterBase*)instance)->Visible = {common.NewFlags.GetFlag("VisibleAtStart").ToString().ToLower()};");
 			result.AppendLine($"((CounterBase*)instance)->FollowFrame = {(!common.Flags.GetFlag("ScrollingIndependant")).ToString().ToLower()};");
 			result.AppendLine($"((CounterBase*)instance)->movements = {BuildMovements(common)};");
 			result.AppendLine(BuildCounter((ObjectCommon)objectInfo.properties));

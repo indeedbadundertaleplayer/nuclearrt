@@ -103,10 +103,10 @@ public class EventProcessor
 				var acBaseType = acBaseTypes.FirstOrDefault(t =>
 				{
 					var instance = Activator.CreateInstance(t) as ConditionBase;
-					return instance?.ObjectType == condition.ObjectType && instance?.Num == condition.Num;
+					return (instance?.ObjectType == condition.ObjectType || condition.ObjectType >= 32 && instance?.ObjectType >= 32) && instance?.Num == condition.Num;
 				});
 
-				if (condition.ObjectType >= 32)
+				if (acBaseType == null && condition.ObjectType >= 32)
 				{
 					acBaseType = typeof(ExtensionConditionBase);
 				}
@@ -155,10 +155,10 @@ public class EventProcessor
 				var acBaseType = acBaseTypes.FirstOrDefault(t =>
 				{
 					var instance = Activator.CreateInstance(t) as ActionBase;
-					return instance?.ObjectType == action.ObjectType && instance?.Num == action.Num;
+					return (instance?.ObjectType == action.ObjectType || action.ObjectType >= 32 && instance?.ObjectType >= 32) && instance?.Num == action.Num;
 				});
 
-				if (action.ObjectType >= 32)
+				if (acBaseType == null && action.ObjectType >= 32)
 				{
 					acBaseType = typeof(ExtensionActionBase);
 				}

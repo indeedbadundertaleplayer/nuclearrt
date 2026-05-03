@@ -240,6 +240,7 @@ void Frame::DrawLayer(Layer& layer)
 		}
 		else if (instance->Type >= 32) // Extension
 		{
+			if (!((Extension*)instance)->Visible) continue;
 			((Extension*)instance)->Draw();
 		}
 	}
