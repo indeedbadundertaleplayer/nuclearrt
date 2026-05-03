@@ -120,7 +120,7 @@ public class FrameExporter : BaseExporter
 			if (obj.parentType != 0) continue;
 			if (GameData.frameitems[(int)obj.objectInfo].properties is ObjectCommon common && common.Flags.GetFlag("DoNotCreateAtStart")) continue;
 			string objectName = SanitizeObjectName(GameData.frameitems[(int)obj.objectInfo].name);
-			objectInstances.Append($"CreateInstance(factory.CreateInstance_{objectName}_{obj.objectInfo}(), {obj.x}, {obj.y}, {obj.layer}, {obj.instance}, {obj.objectInfo}, 0);\n");
+			objectInstances.Append($"CreateInstance(factory.CreateInstance_{objectName}_{obj.objectInfo}(), {obj.x}, {obj.y}, {obj.layer}, {obj.instance}, {obj.objectInfo}, 0, false);\n");
 			objectsCount += 1;
 		}
 

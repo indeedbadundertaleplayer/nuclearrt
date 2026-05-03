@@ -376,7 +376,7 @@ std::vector<unsigned int> Frame::GetFontsUsed()
 	return fontsUsed;
 }
 
-ObjectInstance* Frame::CreateInstance(ObjectInstance* createdInstance, short x, short y, unsigned int layer, short instanceValue, unsigned int objectInfoHandle, short angle, ObjectInstance* parentInstance)
+ObjectInstance* Frame::CreateInstance(ObjectInstance* createdInstance, short x, short y, unsigned int layer, short instanceValue, unsigned int objectInfoHandle, short angle, bool postInitialize, ObjectInstance* parentInstance)
 {
 	createdInstance->Handle = ++MaxObjectInstanceHandle;
 	createdInstance->X = x;
@@ -388,10 +388,13 @@ ObjectInstance* Frame::CreateInstance(ObjectInstance* createdInstance, short x, 
 
 	//TODO: move this to a separate function
 	// Load any textures needed for this instance
-	std::vector<unsigned int> texturesToLoad = createdInstance->GetImagesUsed();
-	auto backend = Application::Instance().GetBackend();
-	for (unsigned int textureId : texturesToLoad) {
-		backend->LoadTexture(textureId);
+	if (postInitialize) // objs created on init have textures loaded in application
+	{
+		std::vector<unsigned int> texturesToLoad = createdInstance->GetImagesUsed();
+		auto backend = Application::Instance().GetBackend();
+		for (unsigned int textureId : texturesToLoad) {
+			backend->LoadTexture(textureId);
+		}
 	}
 	
 	ObjectInstances[createdInstance->Handle] = createdInstance;
