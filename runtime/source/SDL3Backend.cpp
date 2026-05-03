@@ -3,7 +3,6 @@
 #include "SDL3Backend.h"
 
 #include <iostream>
-#include <math.h>
 #include "Application.h"
 #include "Frame.h"
 #include "FontBank.h"
@@ -729,6 +728,64 @@ void SDL3Backend::SetOrthoProjection(GLuint program, GLint mvpLoc, float width, 
 	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp);
 }
 
+void SDL3Backend::ApplyEffectParameters(EffectInstance* effectInstance, int textureWidth, int textureHeight, int rgbCoefficient, int effect, unsigned char effectParameter, GLuint textureId) {
+	float r = ((rgbCoefficient >> 16) & 0xFF) / 255.0f;
+	float g = ((rgbCoefficient >> 8) & 0xFF) / 255.0f;
+	float b = (rgbCoefficient & 0xFF) / 255.0f;
+	float a = (255 - effectParameter) / 255.0f;
+
+	GLint texLoc = -1;
+	GLint colorLoc = -1;
+	GLuint program = 0;
+
+	if (effectInstance != nullptr) {
+		EffectShader* shader = LoadShader(effectInstance->filename);
+		if (shader != nullptr) {
+			glUseProgram(shader->program);
+			currentEffect = -1;
+			program = shader->program;
+			texLoc = shader->texLoc;
+			colorLoc = shader->colorLoc;
+
+			for (auto& param : effectInstance->Parameters) {
+				GLint pixelWidthLoc = glGetUniformLocation(shader->program, "fPixelWidth");
+				GLint pixelHeightLoc = glGetUniformLocation(shader->program, "fPixelHeight");
+				if (pixelWidthLoc >= 0) glUniform1f(pixelWidthLoc, 1.0f / textureWidth);
+				if (pixelHeightLoc >= 0) glUniform1f(pixelHeightLoc, 1.0f / textureHeight);
+
+				GLint loc = glGetUniformLocation(shader->program, param.Name.c_str());
+				if (loc < 0) continue;
+				if (param.Type == 0) { // Int
+					glUniform1i(loc, std::any_cast<int>(param.Value));
+				} else if (param.Type == 1) { // Float
+					glUniform1f(loc, std::any_cast<float>(param.Value));
+				} else if (param.Type == 2) { // Color
+					int c = std::any_cast<int>(param.Value);
+					float pr = (c & 0xFF) / 255.0f;
+					float pg = ((c >> 8) & 0xFF) / 255.0f;
+					float pb = ((c >> 16) & 0xFF) / 255.0f;
+					glUniform4f(loc, pr, pg, pb, 1.0f);
+				}
+			}
+		}
+	}
+
+	if (program == 0) {
+		UseEffectShader(effect);
+		EffectShader& shader = effectShaders[effect];
+		program = shader.program;
+		texLoc = shader.texLoc;
+		colorLoc = shader.colorLoc;
+	}
+
+	if (textureId != 0) {
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, textureId);
+		if (texLoc >= 0) glUniform1i(texLoc, 0);
+		if (colorLoc >= 0) glUniform4f(colorLoc, r, g, b, a);
+	}
+}
+
 void SDL3Backend::RenderQuad(float x, float y, float w, float h, float angle, float pivotX, float pivotY, float u0, float v0, float u1, float v1) {
 	float rad = angle * (3.14159265358979323846f / 180.0f);
 	float cosA = cosf(rad);
@@ -878,18 +935,9 @@ void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, in
 	}
 	
 	GLTexture& texture = texIt->second;
-	
-	float r = ((color >> 16) & 0xFF) / 255.0f;
-	float g = ((color >> 8) & 0xFF) / 255.0f;
-	float b = (color & 0xFF) / 255.0f;
-	float a = (255 - effectParameter) / 255.0f;
 
 	// semitransparent doesn't have rgb coeff
-	if (effect == 1) {
-		r = 1.0f;
-		g = 1.0f;
-		b = 1.0f;
-	}
+	if (effect == 1) color = 0xFFFFFF;
 
 	bool needsBlendRestore = false;
 	
@@ -904,54 +952,7 @@ void SDL3Backend::DrawTexture(int id, int x, int y, int offsetX, int offsetY, in
 		needsBlendRestore = true;
 	}
 
-	GLint texLoc = -1;
-	GLint colorLoc = -1;
-	GLuint program = 0;
-
-	if (effectInstance != nullptr) {
-		EffectShader* shader = LoadShader(effectInstance->filename);
-		if (shader != nullptr) {
-			glUseProgram(shader->program);
-			currentEffect = -1;
-			program = shader->program;
-			texLoc = shader->texLoc;
-			colorLoc = shader->colorLoc;
-
-			for (auto& param : effectInstance->Parameters) {
-				GLint pixelWidthLoc = glGetUniformLocation(shader->program, "fPixelWidth");
-				GLint pixelHeightLoc = glGetUniformLocation(shader->program, "fPixelHeight");
-				if (pixelWidthLoc >= 0) glUniform1f(pixelWidthLoc, 1.0f / texture.width);
-				if (pixelHeightLoc >= 0) glUniform1f(pixelHeightLoc, 1.0f / texture.height);
-
-				GLint loc = glGetUniformLocation(shader->program, param.Name.c_str());
-				if (loc < 0) continue;
-				if (param.Type == 0) { // Int
-					glUniform1i(loc, std::any_cast<int>(param.Value));
-				} else if (param.Type == 1) { // Float
-					glUniform1f(loc, std::any_cast<float>(param.Value));
-				} else if (param.Type == 2) { // Color
-					int c = std::any_cast<int>(param.Value);
-					float pr = (c & 0xFF) / 255.0f;
-					float pg = ((c >> 8) & 0xFF) / 255.0f;
-					float pb = ((c >> 16) & 0xFF) / 255.0f;
-					glUniform4f(loc, pr, pg, pb, 1.0f);
-				}
-			}
-		}
-	}
-
-	if (program == 0) {
-		UseEffectShader(effect);
-		EffectShader& shader = effectShaders[effect];
-		program = shader.program;
-		texLoc = shader.texLoc;
-		colorLoc = shader.colorLoc;
-	}
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, texture.textureId);
-	if (texLoc >= 0) glUniform1i(texLoc, 0);
-	if (colorLoc >= 0) glUniform4f(colorLoc, r, g, b, a);
+	ApplyEffectParameters(effectInstance, texture.width, texture.height, color, effect, effectParameter, texture.textureId);
 	
 	float drawX = static_cast<float>(x - offsetX);
 	float drawY = static_cast<float>(y - offsetY);
@@ -1122,11 +1123,6 @@ void SDL3Backend::DrawEffectRect(int x, int y, int width, int height, int rgbCoe
 		return;
 	}
 
-	EffectShader* shader = LoadShader(effectInstance->filename);
-	if (shader == nullptr) {
-		return;
-	}
-
 	int srcX = std::max(0, x);
 	int srcY = std::max(0, y);
 	int srcW = std::min(width, renderTargetWidth - srcX);
@@ -1146,39 +1142,8 @@ void SDL3Backend::DrawEffectRect(int x, int y, int width, int height, int rgbCoe
 
 	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, srcX, renderTargetHeight - (srcY + srcH), srcW, srcH);
 
-	glUseProgram(shader->program);
-	currentEffect = -1;
-	
-	float r = ((rgbCoefficient >> 16) & 0xFF) / 255.0f;
-	float g = ((rgbCoefficient >> 8) & 0xFF) / 255.0f;
-	float b = (rgbCoefficient & 0xFF) / 255.0f;
-	float a = (255 - effectParameter) / 255.0f;
+	ApplyEffectParameters(effectInstance, srcW, srcH, rgbCoefficient, 0, effectParameter, 0);
 
-	if (shader->texLoc >= 0) glUniform1i(shader->texLoc, 0);
-	if (shader->colorLoc >= 0) glUniform4f(shader->colorLoc, r, g, b, a);
-	for (auto& param : effectInstance->Parameters) {
-		GLint pixelWidthLoc = glGetUniformLocation(shader->program, "fPixelWidth");
-		GLint pixelHeightLoc = glGetUniformLocation(shader->program, "fPixelHeight");
-		if (pixelWidthLoc >= 0) glUniform1f(pixelWidthLoc, 1.0f / static_cast<float>(srcW));
-		if (pixelHeightLoc >= 0) glUniform1f(pixelHeightLoc, 1.0f / static_cast<float>(srcH));
-		
-		GLint loc = glGetUniformLocation(shader->program, param.Name.c_str());
-		if (loc < 0) continue;
-		if (param.Type == 0) {
-			glUniform1i(loc, std::any_cast<int>(param.Value));
-		} else if (param.Type == 1) {
-			glUniform1f(loc, std::any_cast<float>(param.Value));
-		} else if (param.Type == 2) {
-			int c = std::any_cast<int>(param.Value);
-			float pr = ((c >> 16) & 0xFF) / 255.0f;
-			float pg = ((c >> 8) & 0xFF) / 255.0f;
-			float pb = (c & 0xFF) / 255.0f;
-			glUniform4f(loc, pr, pg, pb, 1.0f);
-		}
-	}
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, tempTexture);
 	RenderQuad(static_cast<float>(srcX), static_cast<float>(srcY), static_cast<float>(srcW), static_cast<float>(srcH), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f);
 	
 	glDeleteTextures(1, &tempTexture);
@@ -1372,59 +1337,7 @@ void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const st
 		textCache[cacheKey] = cached;
 	}
 
-	float r = ((rgbCoefficient >> 16) & 0xFF) / 255.0f;
-	float g = ((rgbCoefficient >> 8) & 0xFF) / 255.0f;
-	float b = (rgbCoefficient & 0xFF) / 255.0f;
-	float a = (255 - effectParameter) / 255.0f;
-
-	GLint texLoc = -1;
-	GLint colorLoc = -1;
-	GLuint program = 0;
-
-	if (effectInstance != nullptr) {
-		EffectShader* shader = LoadShader(effectInstance->filename);
-		if (shader != nullptr) {
-			glUseProgram(shader->program);
-			currentEffect = -1;
-			program = shader->program;
-			texLoc = shader->texLoc;
-			colorLoc = shader->colorLoc;
-
-			for (auto& param : effectInstance->Parameters) {
-				GLint pixelWidthLoc = glGetUniformLocation(shader->program, "fPixelWidth");
-				GLint pixelHeightLoc = glGetUniformLocation(shader->program, "fPixelHeight");
-				if (pixelWidthLoc >= 0) glUniform1f(pixelWidthLoc, 1.0f / static_cast<float>(texture.width));
-				if (pixelHeightLoc >= 0) glUniform1f(pixelHeightLoc, 1.0f / static_cast<float>(texture.height));
-
-				GLint loc = glGetUniformLocation(shader->program, param.Name.c_str());
-				if (loc < 0) continue;
-				if (param.Type == 0) {
-					glUniform1i(loc, std::any_cast<int>(param.Value));
-				} else if (param.Type == 1) {
-					glUniform1f(loc, std::any_cast<float>(param.Value));
-				} else if (param.Type == 2) {
-					int c = std::any_cast<int>(param.Value);
-					float pr = (c & 0xFF) / 255.0f;
-					float pg = ((c >> 8) & 0xFF) / 255.0f;
-					float pb = ((c >> 16) & 0xFF) / 255.0f;
-					glUniform4f(loc, pr, pg, pb, 1.0f);
-				}
-			}
-		}
-	}
-
-	if (program == 0) {
-		UseEffectShader(0);
-		EffectShader& shader = effectShaders[0];
-		program = shader.program;
-		texLoc = shader.texLoc;
-		colorLoc = shader.colorLoc;
-	}
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, texture.textureId);
-	if (texLoc >= 0) glUniform1i(texLoc, 0);
-	if (colorLoc >= 0) glUniform4f(colorLoc, r, g, b, a);
+	ApplyEffectParameters(effectInstance, width, height, rgbCoefficient, effect, effectParameter, texture.textureId);
 	
 	RenderQuad(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height));
 }

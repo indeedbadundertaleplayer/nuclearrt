@@ -188,6 +188,7 @@ private:
 	
 	void CreateStandardShaders();
 	void UseEffectShader(int effect);
+	void ApplyEffectParameters(EffectInstance* effectInstance, int textureWidth, int textureHeight, int rgbCoefficient, int effect, unsigned char effectParameter, GLuint textureId);
 	std::string LoadShaderSource(const std::string& filename);
 	GLuint CompileShader(GLenum type, const char* source);
 	GLuint CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc);
