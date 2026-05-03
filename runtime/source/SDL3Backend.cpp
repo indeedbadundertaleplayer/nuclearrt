@@ -591,9 +591,9 @@ void SDL3Backend::CreateStandardShaders() {
 		nullptr,
 		nullptr,
 		nullptr,
-		"shaders/standard/add.frag",
+		nullptr,
 		"shaders/standard/monochrome.frag",
-		"shaders/standard/subtract.frag",
+		nullptr,
 		nullptr
 	};
 	
