@@ -619,14 +619,13 @@ void SDL3Backend::CreateStandardShaders() {
 	}
 	
 	// load color shaders for shapes and shit
-	std::string colorVertSrc = LoadShaderSource("shaders/standard/color.vert");
 	std::string colorFragSrc = LoadShaderSource("shaders/standard/color.frag");
-	if (colorVertSrc.empty() || colorFragSrc.empty()) {
+	if (colorFragSrc.empty()) {
 		std::cerr << "Failed to load color shaders" << std::endl;
 		return;
 	}
 	
-	colorShaderProgram = CreateShaderProgram(colorVertSrc.c_str(), colorFragSrc.c_str());
+	colorShaderProgram = CreateShaderProgram(vertexSrc.c_str(), colorFragSrc.c_str());
 	if (colorShaderProgram == 0) {
 		std::cerr << "Failed to create color shader program" << std::endl;
 		return;
