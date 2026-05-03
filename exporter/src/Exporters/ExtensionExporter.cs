@@ -14,7 +14,8 @@ public static class ExtensionExporterRegistry
 		new ButtonObjectExporter(),
 		new IniExporter(),
 		new LayerObjectExporter(),
-		new GlobalStoreXExporter()
+		new GlobalStoreXExporter(),
+		new PerspectiveExporter()
 	};
 
 	public static ExtensionExporter GetExporter(string extensionName)

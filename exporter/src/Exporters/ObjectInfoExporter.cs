@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Text;
 using CTFAK.CCN.Chunks.Objects;
 using CTFAK.MFA.MFAObjectLoaders;
+using CTFAK.MMFParser.EXE.Loaders;
 using CTFAK.Utils;
 
 public class ObjectInfoExporter : BaseExporter
@@ -88,6 +90,9 @@ public class ObjectInfoExporter : BaseExporter
 						}
 					}
 				}
+				else {
+					result.AppendLine($"// Identifier {common.Identifier}");
+				}
 			}
 		}
 
@@ -95,10 +100,44 @@ public class ObjectInfoExporter : BaseExporter
 
 		result.AppendLine($"instance->RGBCoefficient = {ColorToArgb(objectInfo.rgbCoeff)};");
 		result.AppendLine($"instance->Effect = {objectInfo.InkEffect};");
-		if (objectInfo.InkEffect == 0)
-			result.AppendLine($"instance->SetEffectParameter({Math.Clamp(objectInfo.blend, (byte)0, (byte)255)});");
+
+		if (objectInfo.shaderData.hasShader)
+		{
+			Shader shader = GameData.shaders.ShaderList[objectInfo.shaderData.ShaderHandle];
+			result.AppendLine($"instance->effectInstance = EffectBank::CreateEffect_{SanitizeObjectName(shader.Name)}_{objectInfo.shaderData.ShaderHandle}();");
+			for (int i = 0; i < objectInfo.shaderData.parameters.Count; i++)
+			{
+				var parameter = shader.Parameters[i];
+				string value = "";
+				switch (parameter.Type)
+				{
+					case 0: //int, also used as bool
+						value = $"static_cast<int>({BitConverter.ToInt32(objectInfo.shaderData.parameters[i].Value as byte[], 0)})";
+						break;
+					case 1:
+						//read float from bytes
+						value = $"static_cast<float>({((float)BitConverter.ToSingle(objectInfo.shaderData.parameters[i].Value as byte[], 0)).ToString(CultureInfo.InvariantCulture)}";
+						if (!value.Contains('.')) value += ".0";
+						value += "f)";
+						break;
+					case 2: //color
+						value = $"static_cast<int>(0x{BitConverter.ToInt32(objectInfo.shaderData.parameters[i].Value as byte[], 0):X8})";
+						break;
+					default:
+						value = $"static_cast<int>({(int)BitConverter.ToInt32(objectInfo.shaderData.parameters[i].Value as byte[], 0)})";
+						break;
+				}
+				result.AppendLine($"instance->effectInstance->SetParameter(\"{parameter.Name}\", {value});");
+			}
+		}
 		else
-			result.AppendLine($"instance->SetEffectParameter({Math.Clamp(objectInfo.InkEffectValue * 2, 0, 255)});");
+		{
+			if (objectInfo.InkEffect == 0 || objectInfo.InkEffect == 10)
+				result.AppendLine($"instance->SetEffectParameter({Math.Clamp(objectInfo.blend, (byte)0, (byte)255)});");
+			else
+				result.AppendLine($"instance->SetEffectParameter({Math.Clamp(objectInfo.InkEffectValue * 2, 0, 255)});");
+
+		}
 
 		{
 			if (objectInfo.properties is ObjectCommon common)

@@ -7,6 +7,8 @@
 #include "FontBank.h"
 #include "Shape.h"
 #include "PakFile.h"
+#include "EffectInstance.h"
+#include "Bitmap.h"
 
 class Backend {
 public:
@@ -33,17 +35,13 @@ public:
 
 	virtual void LoadTexture(int id) {}
 	virtual void UnloadTexture(int id) {}
-	virtual void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter) {}
+	virtual void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter, EffectInstance* effectInstance = nullptr) {}
 	virtual void DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape) {}
-
-	virtual void DrawRectangle(int x, int y, int width, int height, int color) {}
-	virtual void DrawRectangleLines(int x, int y, int width, int height, int color) {}
-	virtual void DrawLine(int x1, int y1, int x2, int y2, int color) {}
-	virtual void DrawPixel(int x, int y, int color) {}
+	virtual void DrawBitmap(Bitmap& bitmap, int x, int y) {}
 
 	virtual void LoadFont(int id) {}
 	virtual void UnloadFont(int id) {}
-	virtual void DrawText(FontInfo* fontInfo, int x, int y, int color, const std::string& text, int objectHandle = -1) {}
+	virtual void DrawText(FontInfo* fontInfo, int x, int y, int color, const std::string& text, int objectHandle = -1, int rgbCoefficient = 0xFFFFFF, int effect = 0, unsigned char effectParameter = 0, EffectInstance* effectInstance = nullptr) {}
 	// Sample Start
 	virtual bool LoadSample(int id, int channel) {return false;}
 	virtual bool LoadSampleFile(std::string path) {return false;}
@@ -78,7 +76,6 @@ public:
 	virtual uint32_t GetMouseState() { return 0; }
 	virtual void HideMouseCursor() {}
 	virtual void ShowMouseCursor() {}
-	virtual void GetTextureDimensions(int textureId, int& width, int& height) { width = 0; height = 0; }
 
 	//Pak file stuff, maybe move to application class? - shish
 	virtual bool PakFileEntryExists(std::string entry) { return pakFile.Exists(entry); }

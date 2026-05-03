@@ -129,7 +129,7 @@ void Frame::DrawLayer(Layer& layer)
 
 			Application::Instance().GetBackend()->DrawTexture(
 				imageId, instance->X - (scrollX * layer.XCoefficient), instance->Y - (scrollY * layer.YCoefficient),
-				0, 0, 0, 1.0f, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter());
+				0, 0, 0, 1.0f, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter(), instance->effectInstance);
 		}
 		else if (instance->Type == 2)
 		{
@@ -167,7 +167,7 @@ void Frame::DrawLayer(Layer& layer)
 				Application::Instance().GetBackend()->DrawTexture(
 					imageId, instance->X - scrollXOffset, instance->Y - scrollYOffset,
 					imageInfo->HotspotX, imageInfo->HotspotY, 
-					angle, 1.0f, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter());
+					angle, 1.0f, instance->RGBCoefficient, instance->Effect, instance->GetEffectParameter(), instance->effectInstance);
 			}
 		}
 		else if (instance->Type == 3) // Text
@@ -184,7 +184,18 @@ void Frame::DrawLayer(Layer& layer)
 			}
 
 			std::string text = ((StringObject*)instance)->GetText();
-			Application::Instance().GetBackend()->DrawText(FontBank::Instance().GetFont(((StringObject*)instance)->GetFont()), instance->X - scrollXOffset, instance->Y - scrollYOffset, ((StringObject*)instance)->GetColor(), text, instance->Handle);
+			Application::Instance().GetBackend()->DrawText(
+				FontBank::Instance().GetFont(((StringObject*)instance)->GetFont()),
+				instance->X - scrollXOffset,
+				instance->Y - scrollYOffset,
+				((StringObject*)instance)->GetColor(),
+				text,
+				instance->Handle,
+				instance->RGBCoefficient,
+				instance->Effect,
+				instance->GetEffectParameter(),
+				instance->effectInstance
+			);
 		}
 		else if (instance->Type == 5 || instance->Type == 6 || instance->Type == 7) // Score, Lives, Counter
 		{
