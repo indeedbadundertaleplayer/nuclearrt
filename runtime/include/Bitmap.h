@@ -21,9 +21,12 @@ public:
     }
 
     void Clear(int color) {
-        for (int i = 0; i < data.size(); i++) {
-            data[i] = color;
+        if (color == 0 && !data.empty()) {
+            std::memset(data.data(), 0, data.size() * sizeof(unsigned int));
+            return;
         }
+        const unsigned int u = static_cast<unsigned int>(color);
+        std::fill(data.begin(), data.end(), u);
     }
 
     void SetPixel(int x, int y, int color) {
@@ -117,7 +120,7 @@ private:
     void Init(int width, int height) {
         this->width = width;
         this->height = height;
-        data.resize(width * height);
-        Clear(0);
+        const size_t count = static_cast<size_t>(width) * static_cast<size_t>(height);
+        data.assign(count, 0u);
     }
 };

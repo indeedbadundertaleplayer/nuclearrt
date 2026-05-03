@@ -747,12 +747,12 @@ void SDL3Backend::ApplyEffectParameters(EffectInstance* effectInstance, int text
 			texLoc = shader->texLoc;
 			colorLoc = shader->colorLoc;
 
-			for (auto& param : effectInstance->Parameters) {
-				GLint pixelWidthLoc = glGetUniformLocation(shader->program, "fPixelWidth");
-				GLint pixelHeightLoc = glGetUniformLocation(shader->program, "fPixelHeight");
-				if (pixelWidthLoc >= 0) glUniform1f(pixelWidthLoc, 1.0f / textureWidth);
-				if (pixelHeightLoc >= 0) glUniform1f(pixelHeightLoc, 1.0f / textureHeight);
+			GLint pixelWidthLoc = glGetUniformLocation(shader->program, "fPixelWidth");
+			GLint pixelHeightLoc = glGetUniformLocation(shader->program, "fPixelHeight");
+			if (pixelWidthLoc >= 0) glUniform1f(pixelWidthLoc, 1.0f / textureWidth);
+			if (pixelHeightLoc >= 0) glUniform1f(pixelHeightLoc, 1.0f / textureHeight);
 
+			for (auto& param : effectInstance->Parameters) {
 				GLint loc = glGetUniformLocation(shader->program, param.Name.c_str());
 				if (loc < 0) continue;
 				if (param.Type == 0) { // Int
@@ -1251,24 +1251,7 @@ void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const st
 		return;
 	}
 
-	//remove \r from text
-	std::string modifiedText = text;
-	modifiedText.erase(std::remove(modifiedText.begin(), modifiedText.end(), '\r'), modifiedText.end());
-
-	//make tabs 4 spaces
-	for (size_t i = 0; i < modifiedText.size(); i++) {
-		if (modifiedText[i] == '\t') {
-			modifiedText.replace(i, 1, "    ");
-		}
-	}
-
-	//Check if text is empty/just whitespace
-	if (modifiedText.find_first_not_of(" \n\r\t") == std::string::npos) {
-		return;
-	}
-
-	//check cache for texture
-	TextCacheKey cacheKey{ fontInfo->Handle, modifiedText, color, objectHandle };
+	TextCacheKey cacheKey{ fontInfo->Handle, text, color, objectHandle };
 	auto cacheIt = textCache.find(cacheKey);
 	
 	GLTexture texture;
@@ -1293,6 +1276,22 @@ void SDL3Backend::DrawText(FontInfo* fontInfo, int x, int y, int color, const st
 					++it;
 				}
 			}
+		}
+
+		//remove \r from text
+		std::string modifiedText = text;
+		modifiedText.erase(std::remove(modifiedText.begin(), modifiedText.end(), '\r'), modifiedText.end());
+
+		//make tabs 4 spaces
+		for (size_t i = 0; i < modifiedText.size(); i++) {
+			if (modifiedText[i] == '\t') {
+				modifiedText.replace(i, 1, "    ");
+			}
+		}
+
+		//Check if text is empty/just whitespace
+		if (modifiedText.find_first_not_of(" \n\r\t") == std::string::npos) {
+			return;
 		}
 		
 		SDL_Surface* surface = TTF_RenderText_Blended_Wrapped(font, modifiedText.c_str(), 0, RGBToSDLColor(color), 0);
