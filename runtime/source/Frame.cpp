@@ -601,45 +601,22 @@ bool Frame::IsCollidingWithBackground(ObjectInstance *instance)
 	// Check collision with all backdrop objects
 	for (auto& [handle, backdropInstance] : ObjectInstances)
 	{
+		if (backdropInstance->Layer != instance->Layer) continue;
+
 		// Check only against (Quick) backdrop objects
 		if (backdropInstance->Type == 1)
 		{
 			Backdrop* backdrop = (Backdrop*)backdropInstance;
 			
 			// Check if this backdrop is an obstacle
-			if (backdrop->ObstacleType > 0)
-			{
-				// Check if the backdrop is on the same layer as the instance
-				// to ensure scrolling is handled consistently
-				if (backdrop->Layer == instance->Layer)
-				{
-					// Use the existing collision detection between objects
-					if (IsColliding(instance, backdrop))
-					{
-						return true;
-					}
-				}
-			}
+			if (backdrop->ObstacleType > 0) return IsColliding(instance, backdrop);
 		}
 		else if (backdropInstance->Type == 0)
 		{
 			QuickBackdrop* quickBackdrop = (QuickBackdrop*)backdropInstance;
-			if (quickBackdrop->ObstacleType > 0)
-			{
-				// Check if the backdrop is on the same layer as the instance
-				// to ensure scrolling is handled consistently
-				if (quickBackdrop->ObstacleType > 0)
-				{
-					if (quickBackdrop->Layer == instance->Layer)
-					{
-						// Use the existing collision detection between objects
-						if (IsColliding(instance, quickBackdrop))
-						{
-							return true;
-						}
-					}
-				}
-			}
+			
+			// Check if this backdrop is an obstacle
+			if (quickBackdrop->ObstacleType > 0) return IsColliding(instance, quickBackdrop);
 		}
 	}
 	
