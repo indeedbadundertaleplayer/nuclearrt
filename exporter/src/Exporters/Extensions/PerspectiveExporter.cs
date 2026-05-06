@@ -39,43 +39,43 @@ public class PerspectiveExporter : ExtensionExporter
 
 		switch (actionNum)
 		{
-			case 80: // Set Zoom Value
+			case 0: // Set Zoom Value
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetZoomValue({ExpressionConverter.ConvertExpression((ExpressionParameter)eventBase.Items[0].Loader, eventBase)});");
 				break;
-			case 81: // Set effect to Panorama
+			case 1: // Set effect to Panorama
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetEffectType(0);");
 				break;
-			case 82: // Set effect to Perspective
+			case 2: // Set effect to Perspective
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetEffectType(1);");
 				break;
-			case 83: // Set effect to Sine Waves
+			case 3: // Set effect to Sine Waves
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetEffectType(2);");
 				break;
-			case 85: // Set Sine Wave Waves
+			case 5: // Set Sine Wave Waves
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetSineWaveWaves({ExpressionConverter.ConvertExpression((ExpressionParameter)eventBase.Items[0].Loader, eventBase)});");
 				break;
-			case 86: // Set Offset
+			case 6: // Set Offset
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetOffset({ExpressionConverter.ConvertExpression((ExpressionParameter)eventBase.Items[0].Loader, eventBase)});");
 				break;
-			case 87: // Set Horizontal
+			case 7: // Set Horizontal
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetDirection(false);");
 				break;
-			case 88: // Set Vertical
+			case 8: // Set Vertical
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetDirection(true);");
 				break;
-			case 89: // Set Perspective Direction
+			case 9: // Set Perspective Direction
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetPerspectiveDirection(false);");
 				break;
-			case 90: // Set Perspective Direction
+			case 10: // Set Perspective Direction
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetPerspectiveDirection(true);");
 				break;
-			case 92: // Set Width
+			case 12: // Set Width
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetWidth({ExpressionConverter.ConvertExpression((ExpressionParameter)eventBase.Items[0].Loader, eventBase)});");
 				break;
-			case 93: // Set Height
+			case 13: // Set Height
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetHeight({ExpressionConverter.ConvertExpression((ExpressionParameter)eventBase.Items[0].Loader, eventBase)});");
 				break;
-			case 96: // Set effect to Sine Offset
+			case 16: // Set effect to Sine Offset
 				result.AppendLine($"{GetExtensionInstance(eventBase.ObjectInfo)}->SetEffectType(3);");
 				break;
 			default:
@@ -92,19 +92,19 @@ public class PerspectiveExporter : ExtensionExporter
 
 		switch (expression.Num)
 		{
-			case 80: // Get Zoom Value
+			case 0: // Get Zoom Value
 				result = $"{GetExtensionInstance(expression.ObjectInfo)}->GetZoomValue()";
 				break;
-			case 81: // Get Offset
+			case 1: // Get Offset
 				result = $"{GetExtensionInstance(expression.ObjectInfo)}->GetOffset()";
 				break;
-			case 82: // Get Sine Wave Waves
+			case 2: // Get Sine Wave Waves
 				result = $"{GetExtensionInstance(expression.ObjectInfo)}->GetSineWaveWaves()";
 				break;
-			case 84: // Get Width
+			case 4: // Get Width
 				result = $"{GetExtensionInstance(expression.ObjectInfo)}->GetWidth()";
 				break;
-			case 85: // Get Height
+			case 5: // Get Height
 				result = $"{GetExtensionInstance(expression.ObjectInfo)}->GetHeight()";
 				break;
 			default:

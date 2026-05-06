@@ -193,6 +193,7 @@ public class ExpressionConverter
 		if (expression.ObjectType >= 32)
 		{
 			var exporter = ExtensionExporterRegistry.GetExporterByObjectInfo(expression.ObjectInfo, Exporter.Instance.CurrentFrame);
+			expression.Num -= 80;
 
 			if (exporter == null)
 			{
