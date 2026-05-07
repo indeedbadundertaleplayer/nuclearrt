@@ -282,12 +282,5 @@ void PerspectiveExtention::UpdateShaderParameters()
 
 void PerspectiveExtention::Draw()
 {
-	#ifdef NUCLEAR_BACKEND_SDL3
-	auto sdl3Backend = std::dynamic_pointer_cast<SDL3Backend>(Application::Instance().GetBackend());
-	if (!sdl3Backend) {
-		return;
-	}
-
-    sdl3Backend->DrawEffectRect(X, Y, width, height, 0, 0, effectInstance);
-	#endif
+    Application::Instance().GetBackend()->DrawEffectRect(X, Y, width, height, 0, 0, 0, effectInstance);
 }

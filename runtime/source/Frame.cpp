@@ -53,7 +53,37 @@ void Frame::Draw()
 
 	for (unsigned int i = 0; i < Layers.size(); i++)
 	{
+		Application::Instance().GetBackend()->BeginLayerDrawing();
 		DrawLayer(Layers[i]);
+
+		Layer& layer = Layers[i];
+		EffectInstance* effectInstance = nullptr;
+		int effect = 0;
+		int effectParameter = 0;
+		int rgbCoefficient = 0xFFFFFF;
+
+		if ((layer.usePreviousLayerEffect && i > 0) || layer.Effect != 0 || layer.GetEffectParameter() != 0 || layer.RGBCoefficient != 0xFFFFFFFF)
+		{
+			effectInstance = layer.effectInstance;
+			effect = layer.Effect;
+			effectParameter = layer.GetEffectParameter();
+			rgbCoefficient = layer.RGBCoefficient;
+
+			if (layer.usePreviousLayerEffect && i > 0)
+			{
+				int previousLayerIndex = i;
+				while (previousLayerIndex > 0 && Layers[previousLayerIndex].usePreviousLayerEffect)
+				{
+					previousLayerIndex--;
+				}
+				effect = Layers[previousLayerIndex].Effect;
+				effectInstance = Layers[previousLayerIndex].effectInstance;
+				effectParameter = Layers[previousLayerIndex].GetEffectParameter();
+				rgbCoefficient = Layers[previousLayerIndex].RGBCoefficient;
+			}
+		}
+
+		Application::Instance().GetBackend()->EndLayerDrawing(rgbCoefficient, effect, effectParameter, effectInstance);
 	}
 }
 

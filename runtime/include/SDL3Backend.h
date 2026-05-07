@@ -73,6 +73,8 @@ public:
 	void BeginDrawing() override;
 	void EndDrawing() override;
 	void Clear(int color) override;
+	void BeginLayerDrawing() override;
+	void EndLayerDrawing(int rgbCoefficient, int effect, unsigned char effectParameter, EffectInstance* effectInstance) override;
 
 	EffectShader* LoadShader(const std::string& hash);
 	EffectShader* LoadShader(const std::string& name, const std::string& data);
@@ -82,7 +84,7 @@ public:
 	void DrawTexture(int id, int x, int y, int offsetX, int offsetY, int angle, float scale, int color, int effect, unsigned char effectParameter, EffectInstance* effectInstance = nullptr) override;
 	void DrawQuickBackdrop(int x, int y, int width, int height, Shape* shape) override;
 	void DrawBitmap(Bitmap& bitmap, int x, int y) override;
-	void DrawEffectRect(int x, int y, int width, int height, int rgbCoefficient, unsigned char effectParameter, EffectInstance* effectInstance);
+	void DrawEffectRect(int x, int y, int width, int height, int rgbCoefficient, int effect, unsigned char effectParameter, EffectInstance* effectInstance) override;
 
 	void LoadFont(int id) override;
 	void UnloadFont(int id) override;
@@ -158,8 +160,13 @@ private:
 	GLuint quadVBO = 0;
 	GLuint renderTarget = 0;
 	GLuint renderTargetTexture = 0;
+	GLuint layerRenderTarget = 0;
+	GLuint layerRenderTargetTexture = 0;
+	int layerRenderTargetWidth = 0;
+	int layerRenderTargetHeight = 0;
 	int renderTargetWidth = 0;
 	int renderTargetHeight = 0;
+	bool drawingLayer = false;
 	
 	static const int STANDARD_EFFECT_COUNT = 13;
 	EffectShader effectShaders[STANDARD_EFFECT_COUNT];
@@ -193,6 +200,7 @@ private:
 	GLuint CompileShader(GLenum type, const char* source);
 	GLuint CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc);
 	void CreateRenderTarget(int width, int height);
+	void CreateLayerRenderTarget(int width, int height);
 	void RenderQuad(float x, float y, float w, float h, float angle = 0.0f, float pivotX = 0.0f, float pivotY = 0.0f, float u0 = 0.0f, float v0 = 0.0f, float u1 = 1.0f, float v1 = 1.0f);
 	void SetOrthoProjection(GLuint program, GLint mvpLoc, float width, float height);
 	

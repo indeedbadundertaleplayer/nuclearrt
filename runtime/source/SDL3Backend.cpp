@@ -322,6 +322,18 @@ void SDL3Backend::Deinitialize()
 		renderTargetTexture = 0;
 	}
 
+	if (layerRenderTarget != 0) {
+		glDeleteFramebuffers(1, &layerRenderTarget);
+		layerRenderTarget = 0;
+	}
+
+	if (layerRenderTargetTexture != 0) {
+		glDeleteTextures(1, &layerRenderTargetTexture);
+		layerRenderTargetTexture = 0;
+	}
+	layerRenderTargetWidth = 0;
+	layerRenderTargetHeight = 0;
+
 	if (quadVAO != 0) {
 		glDeleteVertexArrays(1, &quadVAO);
 		quadVAO = 0;
@@ -439,6 +451,7 @@ void SDL3Backend::BeginDrawing()
 	
 	glBindFramebuffer(GL_FRAMEBUFFER, renderTarget);
 	glViewport(0, 0, renderTargetWidth, renderTargetHeight);
+	drawingLayer = false;
 
 #ifdef _DEBUG
 	DEBUG_UI.BeginFrame();
@@ -518,6 +531,48 @@ void SDL3Backend::Clear(int color)
 	float b = (color & 0xFF) / 255.0f;
 	glClearColor(r, g, b, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
+}
+
+void SDL3Backend::BeginLayerDrawing()
+{
+	CreateLayerRenderTarget(renderTargetWidth, renderTargetHeight);
+	glBindFramebuffer(GL_FRAMEBUFFER, layerRenderTarget);
+	glViewport(0, 0, renderTargetWidth, renderTargetHeight);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	drawingLayer = true;
+}
+
+void SDL3Backend::EndLayerDrawing(int rgbCoefficient, int effect, unsigned char effectParameter, EffectInstance* effectInstance)
+{
+	if (!drawingLayer) {
+		return;
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, renderTarget);
+	glViewport(0, 0, renderTargetWidth, renderTargetHeight);
+
+	bool needsBlendRestore = false;
+	if (effect == 9) // Add
+	{
+		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ONE, GL_ONE);
+		needsBlendRestore = true;
+	}
+	else if (effect == 11) // Subtract
+	{
+		glBlendFuncSeparate(GL_ZERO, GL_ONE_MINUS_SRC_COLOR, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		needsBlendRestore = true;
+	}
+
+	ApplyEffectParameters(effectInstance, renderTargetWidth, renderTargetHeight, rgbCoefficient, effect, effectParameter, layerRenderTargetTexture);
+	RenderQuad(0.0f, 0.0f, static_cast<float>(renderTargetWidth), static_cast<float>(renderTargetHeight), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f);
+
+	if (needsBlendRestore)
+	{
+		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	}
+
+	drawingLayer = false;
 }
 
 GLuint SDL3Backend::CompileShader(GLenum type, const char* source) {
@@ -715,6 +770,45 @@ void SDL3Backend::CreateRenderTarget(int width, int height) {
 		std::cerr << "Framebuffer is not complete!" << std::endl;
 	}
 	
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void SDL3Backend::CreateLayerRenderTarget(int width, int height) {
+	if (layerRenderTarget != 0 && layerRenderTargetTexture != 0 &&
+		layerRenderTargetWidth == width && layerRenderTargetHeight == height) {
+		return;
+	}
+
+	if (layerRenderTarget != 0) {
+		glDeleteFramebuffers(1, &layerRenderTarget);
+		layerRenderTarget = 0;
+	}
+
+	if (layerRenderTargetTexture != 0) {
+		glDeleteTextures(1, &layerRenderTargetTexture);
+		layerRenderTargetTexture = 0;
+	}
+
+	layerRenderTargetWidth = width;
+	layerRenderTargetHeight = height;
+
+	glGenFramebuffers(1, &layerRenderTarget);
+	glBindFramebuffer(GL_FRAMEBUFFER, layerRenderTarget);
+
+	glGenTextures(1, &layerRenderTargetTexture);
+	glBindTexture(GL_TEXTURE_2D, layerRenderTargetTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, layerRenderTargetTexture, 0);
+
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		std::cerr << "Layer framebuffer is not complete!" << std::endl;
+	}
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -1117,9 +1211,9 @@ void SDL3Backend::DrawBitmap(Bitmap& bitmap, int x, int y)
 	glDeleteTextures(1, &tempTexture);
 }
 
-void SDL3Backend::DrawEffectRect(int x, int y, int width, int height, int rgbCoefficient, unsigned char effectParameter, EffectInstance* effectInstance)
+void SDL3Backend::DrawEffectRect(int x, int y, int width, int height, int rgbCoefficient, int effect, unsigned char effectParameter, EffectInstance* effectInstance)
 {
-	if (effectInstance == nullptr || width <= 0 || height <= 0) {
+	if (width <= 0 || height <= 0) {
 		return;
 	}
 
@@ -1131,6 +1225,45 @@ void SDL3Backend::DrawEffectRect(int x, int y, int width, int height, int rgbCoe
 		return;
 	}
 
+	GLuint copyFramebuffer = drawingLayer ? layerRenderTarget : renderTarget;
+	GLuint composedFramebuffer = 0;
+	GLuint composedTexture = 0;
+	if (drawingLayer) {
+		glGenFramebuffers(1, &composedFramebuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, composedFramebuffer);
+
+		glGenTextures(1, &composedTexture);
+		glBindTexture(GL_TEXTURE_2D, composedTexture);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, renderTargetWidth, renderTargetHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, composedTexture, 0);
+
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) {
+			glViewport(0, 0, renderTargetWidth, renderTargetHeight);
+			glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+
+			UseEffectShader(0);
+			EffectShader& shader = effectShaders[0];
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, renderTargetTexture);
+			glUniform1i(shader.texLoc, 0);
+			glUniform4f(shader.colorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+			RenderQuad(0.0f, 0.0f, static_cast<float>(renderTargetWidth), static_cast<float>(renderTargetHeight), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f);
+
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, layerRenderTargetTexture);
+			glUniform1i(shader.texLoc, 0);
+			glUniform4f(shader.colorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+			RenderQuad(0.0f, 0.0f, static_cast<float>(renderTargetWidth), static_cast<float>(renderTargetHeight), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f);
+
+			copyFramebuffer = composedFramebuffer;
+		}
+	}
+
 	GLuint tempTexture = 0;
 	glGenTextures(1, &tempTexture);
 	glBindTexture(GL_TEXTURE_2D, tempTexture);
@@ -1140,13 +1273,22 @@ void SDL3Backend::DrawEffectRect(int x, int y, int width, int height, int rgbCoe
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, srcW, srcH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
+	glBindFramebuffer(GL_FRAMEBUFFER, copyFramebuffer);
 	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, srcX, renderTargetHeight - (srcY + srcH), srcW, srcH);
+	glBindFramebuffer(GL_FRAMEBUFFER, drawingLayer ? layerRenderTarget : renderTarget);
+	glViewport(0, 0, renderTargetWidth, renderTargetHeight);
 
-	ApplyEffectParameters(effectInstance, srcW, srcH, rgbCoefficient, 0, effectParameter, 0);
+	ApplyEffectParameters(effectInstance, srcW, srcH, rgbCoefficient, effect, effectParameter, tempTexture);
 
 	RenderQuad(static_cast<float>(srcX), static_cast<float>(srcY), static_cast<float>(srcW), static_cast<float>(srcH), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f);
 	
 	glDeleteTextures(1, &tempTexture);
+	if (composedFramebuffer != 0) {
+		glDeleteFramebuffers(1, &composedFramebuffer);
+	}
+	if (composedTexture != 0) {
+		glDeleteTextures(1, &composedTexture);
+	}
 }
 
 void SDL3Backend::LoadFont(int id)
