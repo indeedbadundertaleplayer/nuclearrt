@@ -53,16 +53,23 @@ void Frame::Draw()
 
 	for (unsigned int i = 0; i < Layers.size(); i++)
 	{
-		Application::Instance().GetBackend()->BeginLayerDrawing();
-		DrawLayer(Layers[i]);
-
 		Layer& layer = Layers[i];
+		bool hasLayerEffect = (layer.usePreviousLayerEffect && i > 0) || layer.Effect != 0 || layer.GetEffectParameter() != 0 || layer.RGBCoefficient != 0xFFFFFFFF;
+		if (!hasLayerEffect)
+		{
+			DrawLayer(layer);
+			continue;
+		}
+
+		Application::Instance().GetBackend()->BeginLayerDrawing();
+		DrawLayer(layer);
+
 		EffectInstance* effectInstance = nullptr;
 		int effect = 0;
 		int effectParameter = 0;
 		int rgbCoefficient = 0xFFFFFF;
 
-		if ((layer.usePreviousLayerEffect && i > 0) || layer.Effect != 0 || layer.GetEffectParameter() != 0 || layer.RGBCoefficient != 0xFFFFFFFF)
+		if (hasLayerEffect)
 		{
 			effectInstance = layer.effectInstance;
 			effect = layer.Effect;
