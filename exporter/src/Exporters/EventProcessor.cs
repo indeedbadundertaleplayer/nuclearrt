@@ -307,7 +307,18 @@ public class EventProcessor
 					if (systemQualifier != 0 ||
 					(objectName == "Group.Player" && systemQualifier == 0 && evtObj.InstanceHandle == 0)) // temp fix since system qualifier returns 0 for the player group
 					{
-						relevantObjectInfos.Add(new Tuple<int, string>(short.MaxValue + systemQualifier + 1, Utilities.GetQualifierName(systemQualifier, objectType - 1)));
+						string qualifierName;
+						Quailifer? ccnQualifier = Utilities.FindFrameQualifier(frameIndex, objectInfo, systemQualifier);
+						if (ccnQualifier != null)
+						{
+							qualifierName = Utilities.GetQualifierName(ccnQualifier.Qualifier, ccnQualifier.Type);
+						}
+						else
+						{
+							qualifierName = Utilities.GetQualifierName(systemQualifier, objectType - 1);
+						}
+						
+						relevantObjectInfos.Add(new Tuple<int, string>(short.MaxValue + systemQualifier + 1, qualifierName));
 						break;
 					}
 

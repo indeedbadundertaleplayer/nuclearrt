@@ -466,10 +466,12 @@ public class ExpressionConverter
 			eventObjects = Exporter.Instance.MfaData.Frames[FrameIndex].Events.Objects;
 		}
 
+		int mfaOIHandle = objectInfo;
 		foreach (var evtObj in eventObjects)
 		{
 			if (evtObj.Handle == objectInfo)
 			{
+				mfaOIHandle = objectInfo;
 				objectName = evtObj.Name;
 				objectType = evtObj.ObjectType;
 				systemQualifier = evtObj.SystemQualifier;
@@ -492,7 +494,16 @@ public class ExpressionConverter
 		if (systemQualifier != 0 ||
 		(objectName == "Group.Player" && systemQualifier == 0 && instanceHandle == 0)) // temp fix since system qualifier returns 0 for the player group
 		{
-			objectName = Utilities.GetQualifierName(systemQualifier, objectType - 1);
+			Quailifer? ccnQualifier = Utilities.FindFrameQualifier(FrameIndex, mfaOIHandle, systemQualifier);
+			if (ccnQualifier != null)
+			{
+				objectName = Utilities.GetQualifierName(ccnQualifier.Qualifier, ccnQualifier.Type);
+			}
+			else
+			{
+				objectName = Utilities.GetQualifierName(systemQualifier, objectType - 1);
+			}
+			
 			objectInfo = short.MaxValue + systemQualifier + 1;
 		}
 

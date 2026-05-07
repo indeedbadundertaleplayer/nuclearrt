@@ -154,7 +154,7 @@ public class FrameExporter : BaseExporter
 			if (!uniqueHandles.Contains((uint)qualifier.ObjectInfo))
 			{
 				uniqueHandles.Add((uint)qualifier.ObjectInfo);
-				string objectName = Utilities.GetQualifierName(qualifier.ObjectInfo & 0x7FFF, qualifier.Type);
+				string objectName = Utilities.GetQualifierName(qualifier.Qualifier, qualifier.Type);
 				eventObjects.AppendLine($"std::shared_ptr<ObjectSelector> {SanitizeObjectName(objectName)}_{qualifier.ObjectInfo}_selector;");
 			}
 		}
