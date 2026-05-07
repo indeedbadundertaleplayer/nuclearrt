@@ -567,8 +567,8 @@ GLuint SDL3Backend::CreateShaderProgram(const char* vertexSrc, const char* fragm
 std::string SDL3Backend::LoadShaderSource(const std::string& filename) {
 	std::vector<uint8_t> data = pakFile.GetData(filename);
 	if (data.empty()) {
-		std::cerr << "Failed to load shader: " << filename << std::endl;
-		return "";
+		std::cerr << "Failed to load shader: " << filename  << ". Loading default shader..." << std::endl;
+		return LoadShaderSource("shaders/standard/normal.frag");
 	}
 	return std::string(reinterpret_cast<char*>(data.data()), data.size());
 }
