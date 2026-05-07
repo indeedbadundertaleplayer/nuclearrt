@@ -639,14 +639,18 @@ bool Frame::IsCollidingWithBackground(ObjectInstance *instance)
 			Backdrop* backdrop = (Backdrop*)backdropInstance;
 			
 			// Check if this backdrop is an obstacle
-			if (backdrop->ObstacleType > 0) return IsColliding(instance, backdrop);
+			if (backdrop->ObstacleType > 0) {
+				if (IsColliding(instance, backdrop)) return true;
+			}
 		}
 		else if (backdropInstance->Type == 0)
 		{
 			QuickBackdrop* quickBackdrop = (QuickBackdrop*)backdropInstance;
 			
 			// Check if this backdrop is an obstacle
-			if (quickBackdrop->ObstacleType > 0) return IsColliding(instance, quickBackdrop);
+			if (quickBackdrop->ObstacleType > 0) {
+				if (IsColliding(instance, quickBackdrop)) return true;
+			}
 		}
 	}
 	
