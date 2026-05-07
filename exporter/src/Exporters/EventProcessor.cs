@@ -10,6 +10,13 @@ public class EventProcessor
 {
 	private readonly Exporter _exporter;
 
+	public enum EventLoopType
+	{
+		Animation,
+		Timer,
+		Normal,
+	}
+
 	public EventProcessor(Exporter exporter)
 	{
 		_exporter = exporter;
@@ -27,7 +34,7 @@ public class EventProcessor
 		return false;
 	}
 
-	public string BuildEventUpdateLoop(int frameIndex, bool isTimerUpdateLoop = false)
+	public string BuildEventUpdateLoop(int frameIndex, EventLoopType eventLoopType)
 	{
 		var result = new StringBuilder();
 
@@ -58,7 +65,18 @@ public class EventProcessor
 			}
 
 			//only add event to normal event loop if it doesn't have a loop condition
-			if (DoesEventHaveLoop(evt) == null && IsTimerEvent(evt) == isTimerUpdateLoop) result.Append($"{eventName}();\n");
+			if (DoesEventHaveLoop(evt) == null)
+			{
+				if (eventLoopType == EventLoopType.Timer)
+				{
+					if (IsTimerEvent(evt)) result.Append($"{eventName}();\n");
+				}
+				else if (eventLoopType == EventLoopType.Animation)
+				{
+					if (IsAnimationEvent(evt)) result.Append($"{eventName}();\n");
+				}
+				else result.Append($"{eventName}();\n");
+			}
 		}
 		return result.ToString();
 	}
@@ -471,6 +489,15 @@ public class EventProcessor
 			}
 		}
 
+		return false;
+	}
+
+	public bool IsAnimationEvent(EventGroup evtGroup)
+	{
+		foreach (var condition in evtGroup.Conditions)
+		{
+			if (new AnimationOverCondition().Equals(condition)) return true;
+		}
 		return false;
 	}
 
