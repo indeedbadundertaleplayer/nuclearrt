@@ -103,14 +103,19 @@ public class ExpressionConverter
         { (ObjectType.System, 7),  _ => "std::string(\"\")" }, // Appdir$ // TODO
         { (ObjectType.System, 8),  _ => "std::string(\"\")" }, // Apppath$ // TODO
         { (ObjectType.System, 9),  _ => "std::string(\"\")" }, // Appname$ // TODO
+		{ (ObjectType.System, 10), _ => "std::sin(" }, // Sin
+		{ (ObjectType.System, 11), _ => "std::cos(" }, // Cos
 		{ (ObjectType.System, 13),  _ => "std::sqrt(" }, // Square Root
         { (ObjectType.System, 19), _ => "StringLeft(" }, // String Left
         { (ObjectType.System, 20), _ => "StringRight(" }, // String Right
         { (ObjectType.System, 22), _ => "StringLength(" }, // String Length
 		{ (ObjectType.System, 23), e => (e.Loader as DoubleExp).FloatValue.ToString() },
 		{ (ObjectType.System, 24), e => $"Application::Instance().GetAppData()->GetGlobalValue({GetGlobalValueIndex(e.Loader as GlobalCommon)})" }, // Global Value
-		{ (ObjectType.System, 29), _ => "std::abs(" }, // Abs(Loop Index
+		{ (ObjectType.System, 29), _ => "std::abs(" }, // Abs(
+		{ (ObjectType.System, 31), _ => "std::floor(" }, // Floor
+		{ (ObjectType.System, 40), _ => "std::min(" }, // Min(
         { (ObjectType.System, 41), _ => "std::max(" }, // Max(
+		{ (ObjectType.System, 42), _ => "GetRGB(" }, // GetRGB
         { (ObjectType.System, 46), _ => "Loopindex(" }, // LoopIndex
 		{ (ObjectType.System, 48), _ => "std::round(" }, // Round
 		{ (ObjectType.System, 50), e => $"Application::Instance().GetAppData()->GetGlobalString({GetGlobalValueIndex(e.Loader as GlobalCommon)})" },
@@ -123,6 +128,9 @@ public class ExpressionConverter
         { (ObjectType.Arithmetic, 4), _ => " - " }, // Sub
         { (ObjectType.Arithmetic, 6), _ => " * " }, // Multiply
         { (ObjectType.Arithmetic, 8), _ => " /MathHelper::GetSafeDivision()/ " }, // Division
+		{ (ObjectType.Arithmetic, 10), _ => " % " }, // Mod
+		{ (ObjectType.Arithmetic, 12), _ => " ^ " }, // Power
+
     };
 
 	public static int GetGlobalValueIndex(GlobalCommon value)
@@ -178,12 +186,26 @@ public class ExpressionConverter
 					else
 						return stringBuilder.Append($"({GetSelector(expression.ObjectInfo)}->Count() > 0 ? (*{GetSelector(expression.ObjectInfo)}->begin())->X : 0)");
 				}
+			case 13: // Alterable Flag
+				{
+					if (expression.ObjectInfo == eventBase.ObjectInfo && expression.ObjectInfoList == eventBase.ObjectInfoList)
+						return stringBuilder.Append($"GetAlterableFlagValue(instance, ");
+					else
+						return stringBuilder.Append($"GetAlterableFlagValue({GetSelector(expression.ObjectInfo)}, ");
+				}
 			case 16: // Alterable Value
 				{
 					if (expression.ObjectInfo == eventBase.ObjectInfo && expression.ObjectInfoList == eventBase.ObjectInfoList)
 						return stringBuilder.Append($"(({GetObjectClassName(expression.ObjectInfo)}*)instance)->Values.GetValue({((ShortExp)expression.Loader).Value})");
 					else
 						return stringBuilder.Append($"({GetSelector(expression.ObjectInfo)}->Count() > 0 ? (({GetObjectClassName(expression.ObjectInfo)}*)*({GetSelector(expression.ObjectInfo)}->begin()))->Values.GetValue({((ShortExp)expression.Loader).Value}) : 0)");
+				}
+			case 30: //Alterable Value by Index
+				{
+					if (expression.ObjectInfo == eventBase.ObjectInfo && expression.ObjectInfoList == eventBase.ObjectInfoList)
+						return stringBuilder.Append($"GetAlterableValueByIndex(instance, ");
+					else
+						return stringBuilder.Append($"GetAlterableValueByIndex({GetSelector(expression.ObjectInfo)}, ");
 				}
 		}
 
@@ -265,6 +287,20 @@ public class ExpressionConverter
 						return stringBuilder.Append($"OAngle(instance, ");
 					else
 						return stringBuilder.Append($"OAngle({GetSelector(expression.ObjectInfo)}, ");
+				}
+			case 40: // Object Width
+				{
+					if (expression.ObjectInfo == eventBase.ObjectInfo && expression.ObjectInfoList == eventBase.ObjectInfoList)
+						return stringBuilder.Append("((Active*)instance)->animations.GetWidth()");
+					else
+						return stringBuilder.Append($"({GetSelector(expression.ObjectInfo)}->Count() > 0 ? ((Active*)*({GetSelector(expression.ObjectInfo)}->begin()))->animations.GetWidth() : 0)");
+				}
+			case 41: // Object Height
+				{
+					if (expression.ObjectInfo == eventBase.ObjectInfo && expression.ObjectInfoList == eventBase.ObjectInfoList)
+						return stringBuilder.Append("((Active*)instance)->animations.GetHeight()");
+					else
+						return stringBuilder.Append($"({GetSelector(expression.ObjectInfo)}->Count() > 0 ? ((Active*)*({GetSelector(expression.ObjectInfo)}->begin()))->animations.GetHeight() : 0)");
 				}
 			case 83: // Angle
 				{
