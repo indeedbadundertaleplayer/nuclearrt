@@ -219,9 +219,9 @@ public class ExpressionConverter
 
 			if (exporter == null)
 			{
-				ObjectCommon common = Exporter.Instance.GameData.frameitems[GetObject(expression.ObjectInfo, false, Exporter.Instance.CurrentFrame).Item1].properties as ObjectCommon;
-				Logger.Log($"Extension exporter not found for ObjectInfo {expression.ObjectInfo} ({common.Identifier})");
-				stringBuilder.Append($"Extension exporter not found for ObjectInfo {expression.ObjectInfo} ({common.Identifier}). ({expression.ObjectType}, {expression.Num})");
+				ObjectCommon? common = Exporter.Instance.GameData.frameitems.GetValueOrDefault(GetObject(expression.ObjectInfo, false, Exporter.Instance.CurrentFrame).Item1)?.properties as ObjectCommon;
+				Logger.Log($"Extension exporter not found for ObjectInfo {expression.ObjectInfo} ({common?.Identifier ?? ""})");
+				stringBuilder.Append($"Extension exporter not found for ObjectInfo {expression.ObjectInfo} ({common?.Identifier ?? ""}). ({expression.ObjectType}, {expression.Num})");
 				HandleUnimplemented(stringBuilder, expression, eventBase);
 				return stringBuilder;
 			}
