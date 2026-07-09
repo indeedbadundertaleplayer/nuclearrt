@@ -278,7 +278,7 @@ void SDL3GPUBackend::EndLayerDrawing(int rgbCoefficient, int effect, unsigned ch
 	if (!pipelinesToUse[usePipeline]) return;
 	SDL_BindGPUGraphicsPipeline(renderPass, pipelinesToUse[usePipeline]);
 	SDL_GPUTextureSamplerBinding textureSampler = {layerRenderTarget, samplers[0]};
-	SDL_BindGPUFragmentSamplers(renderPass, 1, &textureSampler, 1);
+	SDL_BindGPUFragmentSamplers(renderPass, 0, &textureSampler, 1);
 	ApplyEffectParameters(textureSize, effectInstance, rgbCoefficient, effect, effectParameter);
 	RenderQuad(0, 0, renderTargetWidth, renderTargetHeight);
 	drawingLayer = false;
