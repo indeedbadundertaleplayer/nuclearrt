@@ -774,17 +774,17 @@ void SDL3GPUBackend::ApplyEffectParameters(float textureSize[2], EffectInstance 
 			Uint32 offset = 0;
 			for (auto param : effectInstance->Parameters) {
 				if (param.Type == 0) { // int
-					int integerParam = std::any_cast<int>(param.Value);
+					int integerParam = std::get<int>(param.Value);
 					SDL_memcpy(static_cast<char*>(shaderFragmentBuffer) + offset, &integerParam, sizeof(int));
 					offset += sizeof(int);
 				}
 				else if (param.Type == 1) { // float
-					float floatParam = std::any_cast<float>(param.Value);
+					float floatParam = std::get<float>(param.Value);
 					SDL_memcpy(static_cast<char*>(shaderFragmentBuffer) + offset, &floatParam, sizeof(float));
 					offset += sizeof(float);
 				}
 				else if (param.Type == 2) { // color
-					int c = std::any_cast<int>(param.Value);
+					int c = std::get<int>(param.Value);
 					float pr = (c & 0xFF) / 255.0f;
 					float pg = ((c >> 8) & 0xFF) / 255.0f;
 					float pb = ((c >> 16) & 0xFF) / 255.0f;
@@ -1328,7 +1328,7 @@ SDL_GPUTexture* SDL3GPUBackend::CreateRenderTarget(int width, int height)
 {
 	renderTargetWidth = width;
 	renderTargetHeight = height;
-	if (width < 0 || height < 0) return;
+	if (width < 0 || height < 0) return nullptr;
 	SDL_GPUTextureCreateInfo renderTargetInfo;
 	renderTargetInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
 	renderTargetInfo.type = SDL_GPU_TEXTURETYPE_2D;
