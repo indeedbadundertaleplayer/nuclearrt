@@ -551,7 +551,7 @@ void SDL3GPUBackend::DrawQuickBackdrop(int x, int y, int width, int height, Shap
 }
 void SDL3GPUBackend::DrawCounterBar(int x, int y, Counter *counter)
 {
-	if (counter.Width <= 0 || counter->Height <= 0)
+	if (counter->Width <= 0 || counter->Height <= 0)
 	{
 		return;
 	}
