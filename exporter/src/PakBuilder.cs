@@ -128,7 +128,10 @@ public class PakBuilder
 	{
 		Dictionary<Tuple<string, List<string>>, PakFile> shaderVersions = new Dictionary<Tuple<string, List<string>>, PakFile>() {
 			{ Tuple.Create("gles300", new List<string> { "web", "mobile" }), new PakFile() },
-			{ Tuple.Create("gl330", new List<string> { "desktop" }), new PakFile() }
+			{ Tuple.Create("gl330", new List<string> { "desktop" }), new PakFile() },
+			{ Tuple.Create("direct3d12", new List<string> {"desktop"}), new PakFile() },
+			{ Tuple.Create("vulkan", new List<string> {"desktop", "mobile"}), new PakFile() },
+			{ Tuple.Create("metal", new List<string> {"macos", "mobile"}), new PakFile() }
 		};
 		var baseShaderFolder = new DirectoryInfo(Path.Combine(outputPath.FullName, "shaders"));
 		if (baseShaderFolder.Exists)

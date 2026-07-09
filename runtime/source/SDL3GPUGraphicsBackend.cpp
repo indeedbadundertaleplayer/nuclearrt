@@ -1217,15 +1217,14 @@ SDL_GPUShader *SDL3GPUBackend::LoadShader(std::string path, unsigned int sampler
 		path += ".spirv";
 		shaderCreateInfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
 	}
-	size_t codeSize;
-	Uint8* data = (Uint8*)SDL_LoadFile(path.c_str(), &codeSize);
-	if (!data) {
+	std::vector<Uint8> data = backend->GetPlatform()->GetPakFile().GetData(path);
+	if (!data.data()) {
 		backend->GetPlatform()->Log("Bad Data: " + path); // bad. -indeednotfunny
 		return nullptr;
 	}
 	
-	shaderCreateInfo.code = data;
-	shaderCreateInfo.code_size = codeSize;
+	shaderCreateInfo.code = data.data();
+	shaderCreateInfo.code_size = data.size();
 	shaderCreateInfo.stage = (SDL_strstr(path.c_str(), ".vert")) ? SDL_GPU_SHADERSTAGE_VERTEX : SDL_GPU_SHADERSTAGE_FRAGMENT;
 	shaderCreateInfo.num_samplers = samplers;
 	shaderCreateInfo.num_storage_textures = storageTextures;
