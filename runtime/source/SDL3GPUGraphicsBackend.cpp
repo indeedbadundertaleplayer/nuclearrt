@@ -118,6 +118,10 @@ void SDL3GPUBackend::Deinitialize()
 	}
 	renderTargetWidth = 0;
 	renderTargetHeight = 0;
+	if (defaultVertexShader) {
+		SDL_ReleaseGPUShader(gpuDevice, defaultVertexShader);
+		defaultVertexShader = nullptr;
+	}
 	for (auto& pair : pipelinesToUse) {
 		if (!pair.second) continue;
 		SDL_ReleaseGPUGraphicsPipeline(gpuDevice, pair.second);
