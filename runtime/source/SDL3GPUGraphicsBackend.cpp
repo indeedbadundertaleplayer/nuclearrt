@@ -1234,8 +1234,7 @@ SDL_GPUShader *SDL3GPUBackend::LoadShader(std::string path, unsigned int sampler
 	shaderCreateInfo.num_storage_textures = storageTextures;
 	shaderCreateInfo.num_storage_buffers = storageBuffers;
 	shaderCreateInfo.num_uniform_buffers = uniformBuffers;
-	shaderCreateInfo.entrypoint = "main";
-
+	
 	SDL_GPUShader* shader = SDL_CreateGPUShader(gpuDevice, &shaderCreateInfo);
 	if (!shader) {
 		backend->GetPlatform()->Log("SDL_CreateGPUShader Error: " + std::string(SDL_GetError()));
